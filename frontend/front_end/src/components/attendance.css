@@ -1,0 +1,87 @@
+/* === AttendanceForm.css ===
+.container {
+  width: 300%;
+  margin: 40px auto;
+  padding: 24px;
+  background: #fefefe;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  font-family: sans-serif;
+}
+
+.title {
+  text-align: center;
+  font-size: 24px;
+  color: #2a4365;
+  margin-bottom: 20px;
+}
+
+.date-input {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.date-input input {
+  padding: 6px 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+.attendance-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.attendance-table th,
+.attendance-table td {
+  border: 1px solid #ddd;
+  padding: 10px;
+  color:black;
+}
+
+.attendance-table tr:hover{
+  border: 1px solid #ddd;
+  padding: 10px;
+  color:white;
+}
+.attendance-table th {
+  background-color: #f4f4f4;
+  text-align: left;
+}
+
+.center {
+  text-align: center;
+}
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+}
+
+.actions button {
+  background-color: #2b6cb0;
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.actions button:hover {
+  background-color: #2c5282;
+  
+}
+
+.message {
+  font-size: 14px;
+  color: green;
+} */
