@@ -40,8 +40,20 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'app.apps.AppConfigCustom',
     'rest_framework',
-    'corsheaders'
+    'corsheaders',
+    
 ]
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
+
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
@@ -58,6 +70,7 @@ MIDDLEWARE = [
 CORS_ALLOW_ALL_ORIGINS=True
 ROOT_URLCONF = 'back_end.urls'
 
+AUTH_USER_MODEL = "app.User"
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',

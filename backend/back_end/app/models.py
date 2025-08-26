@@ -2,13 +2,20 @@ from django.db import models
 from django.db.models import Sum
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+from django.contrib.auth.models import AbstractUser
 # Create your models here.
 
-    
+class User(AbstractUser):
+    ROLE_CHOICES = (
+        ('admin', 'Admin'),
+        ('teacher', 'Teacher'),
+        ('student', 'Student'),
+    )
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student')
 class Teachers(models.Model):
     full_name=models.CharField(max_length=150)
     phone_number=models.CharField(max_length=20)
-    
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="teacher_profile")
     email_address=models.CharField(max_length=100)
     subject=models.CharField(max_length=50)
     department=models.CharField(max_length=30)
@@ -45,7 +52,7 @@ class Classes(models.Model):
 class Students(models.Model):
     name=models.CharField(max_length=100)
     f_name=models.CharField(max_length=100)
-    
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="student_profile")
     role_number=models.CharField(max_length=20)
     parent_mobile_number=models.CharField(max_length=20)
     address=models.CharField(max_length=200)

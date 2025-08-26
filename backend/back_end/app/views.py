@@ -13,8 +13,14 @@ from django.core.exceptions import ValidationError
 from rest_framework import status
 from django.db.models import Sum
 from rest_framework import generics
+from rest_framework.permissions import IsAuthenticated
 from .models import ExpenseHistory
-from .serializers import ExpenseHistorySerializer
+from .serializers import ExpenseHistorySerializer,UserSerializer
+
+class UserProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        return Response(UserSerializer(request.user).data)
 
 # Create your views here.
 @api_view(['GET','POST'])

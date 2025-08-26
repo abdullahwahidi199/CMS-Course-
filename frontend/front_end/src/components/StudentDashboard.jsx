@@ -1,0 +1,1 @@
+export default function StudentDashboard(){ return <div className="p-6">students Dashboard</div>; }  

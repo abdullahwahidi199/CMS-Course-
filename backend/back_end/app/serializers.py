@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Students,Teachers,Events,Classes,Attendance,Staff,Expenses,ExpenseHistory,RoomOfClass
+from .models import Students,Teachers,Events,Classes,Attendance,Staff,Expenses,ExpenseHistory,RoomOfClass,User
 
 class AttendanceSerializer(serializers.ModelSerializer):
     class Meta:
@@ -31,6 +31,13 @@ class EventSerializer(serializers.ModelSerializer):
         model=Events
         fields=['id','title','discription','image','date']
 
+class UserSerializer(serializers.ModelSerializer):
+    teacher_profile = TeachersSerializer(read_only=True)
+    student_profile = StudentsSerializer(read_only=True)
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'role', 'teacher_profile', 'student_profile']
 class ClassesSerializer(serializers.ModelSerializer):
     student=StudentsSerializer(many=True, read_only=True)
     roomOfClass=RoomMiniSerializer(read_only=True)
