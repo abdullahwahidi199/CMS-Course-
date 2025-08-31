@@ -5,10 +5,16 @@ function ExpenseHistory() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const savedTokens=localStorage.getItem("tokens");
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const response = await fetch("http://127.0.0.1:8000/school/expenses/history/");
+        const parsedTokens=JSON.parse(savedTokens)
+        const response = await fetch("http://127.0.0.1:8000/school/expenses/history/",{
+          headers:{
+            Authorization: `Bearer ${parsedTokens.access}`,
+          }
+        });
         if (!response.ok) {
           throw new Error("Failed to fetch expense history");
         }

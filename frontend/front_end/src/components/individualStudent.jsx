@@ -12,10 +12,17 @@ function IndividaulStudent() {
   const [studentClass,setStudentClass]=useState("")
   const [editFeeDisplay,setEditFeeDisplay]=useState(false)
   const [payment,setPayment]=useState("")
+
+  const token=localStorage.getItem("tokens");
   const fetchStudent = async () => {
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/students/${id}/`);
+      const parsedTokens=JSON.parse(token);
+      const response = await fetch(`http://127.0.0.1:8000/students/${id}/`,{
+        headers:{
+          Authorization: `Bearer ${parsedTokens.access}`,
+        }
+      });
       if (!response.ok) {
         throw new Error('could not fetch the student!');
       }
@@ -38,6 +45,9 @@ function IndividaulStudent() {
     try {
       const response = await fetch(`http://127.0.0.1:8000/students/${id}/`, {
         method: 'DELETE',
+        headers:{
+          Authorization: `Bearer ${JSON.parse(token).access}`,
+        }
       });
       if (!response.ok) {
         throw new Error('could not delete the user!')
@@ -54,7 +64,7 @@ function IndividaulStudent() {
   try {
     const res = await fetch(`http://127.0.0.1:8000/students/${id}/`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' ,Authorization: `Bearer ${JSON.parse(token).access}`},
       body: JSON.stringify({ payment })
     });
 
@@ -81,7 +91,8 @@ function IndividaulStudent() {
   }
   function handleCancel() {
     setUpdatedStudent({ 'name': '', 'f_name': '', 'role_number': '', 'parent_mobile_number': '', 'address': '', 'studentClass': '' })
-    navigate('/IndividaulStudent')
+    // navigate('/IndividaulStudent')
+    
     setEditFormDisplay(!editFormDisplay)
   }
 
@@ -92,7 +103,7 @@ function IndividaulStudent() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-
+          Authorization: `Bearer ${JSON.parse(token).access}`
         },
         body: JSON.stringify(updatedStudent)
       })
@@ -157,7 +168,7 @@ function IndividaulStudent() {
               <p className="font-semibold">Address:</p>
               <div className="flex justify-between space-x-4">
                 <button
-                  onClick={() => window.confirm('Are you sure you want to delete the student?') ? handleDelete() : navigate('/attendence')}
+                  onClick={() => window.confirm('Are you sure you want to delete the student?') ? handleDelete() : setEditFromDisplay(false)}
                   className="mt-6 inline-flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded shadow"
                 >
                   <Trash2 size={16} /> Delete
@@ -209,7 +220,7 @@ function IndividaulStudent() {
               <Save size={16} /> Save
             </button>
             <button
-              onClick={() => window.confirm('Do you want to cancel editing?') ? handleCancel() : navigate('/IndividaulStudent')}
+              onClick={() => window.confirm('Do you want to cancel editing?') ? handleCancel() : setEditFormDisplay(false)}
               className="inline-flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white px-5 py-2 rounded shadow"
             >
               <XCircle size={16} /> Cancel

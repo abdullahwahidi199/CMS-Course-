@@ -10,10 +10,13 @@ function Teachers() {
 
     const [editTeacherId, setEditTeacherId] = useState(null)
     const [updatedTeacher, setUpdatedTeacher] = useState({ 'full_name': '', 'phone_number': '', 'email_address': '', 'subject': '', 'department': '' })
-
+    const savedTokens = localStorage.getItem("tokens");
     const getTeachers = async () => {
         try {
-            const response = await fetch(`http://127.0.0.1:8000/teachers/`)
+            const parsedTokens = JSON.parse(savedTokens);
+            const response = await fetch(`http://127.0.0.1:8000/teachers/`,{
+                headers:{ Authorization: `Bearer ${parsedTokens.access}`},
+            })
             if (!response.ok) {
                 throw new Error('could not fetch teachers!')
             }
@@ -33,9 +36,10 @@ function Teachers() {
     const postTeacher = async (e) => {
         e.preventDefault();
         try {
+            const parsedTokens = JSON.parse(savedTokens);
             const response = await fetch(`http://127.0.0.1:8000/teachers/`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json' , Authorization: `Bearer ${parsedTokens.access}`},
                 body: JSON.stringify(newTeacher)
             })
 
@@ -56,9 +60,10 @@ function Teachers() {
 
         e.preventDefault();
         try {
+            const parsedTokens = JSON.parse(savedTokens);
             const response = await fetch(`http://127.0.0.1:8000/teachers/${editTeacherId}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${parsedTokens.access}` },
                 body: JSON.stringify(updatedTeacher)
             })
             if (!response.ok) {
@@ -76,8 +81,10 @@ function Teachers() {
 
     const deleteTeacher = async () => {
         try {
+            const parsedTokens = JSON.parse(savedTokens);
             const response = await fetch(`http://127.0.0.1:8000/teachers/${editTeacherId}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${parsedTokens.access}` },
             })
             if (!response.ok) {
                 throw new Error('Could not delete the teacher!')

@@ -17,10 +17,16 @@ function Events() {
     const [date, setDate] = useState("")
 
     const [editEvent, setEditEvent] = useState(null)
-
+    const savedTokens = localStorage.getItem("tokens");
     const fetchStudents = async () => {
+        
         try {
-            const response = await fetch('http://127.0.0.1:8000/students/');
+            const parsedTokens = JSON.parse(savedTokens);
+            const response = await fetch('http://127.0.0.1:8000/students/',{
+                headers: {
+          Authorization: `Bearer ${parsedTokens.access}`,
+        },
+            });
             if (!response.ok) {
                 throw new Error('failed to fetch students')
             }
@@ -34,7 +40,11 @@ function Events() {
     }
     const fetchTeachers = async () => {
         try {
-            const response = await fetch('http://127.0.0.1:8000/teachers/');
+            const parsedTokens = JSON.parse(savedTokens);
+
+            const response = await fetch('http://127.0.0.1:8000/teachers/',{
+                headers:{ Authorization: `Bearer ${parsedTokens.access}`},
+            });
             if (!response.ok) {
                 throw new Error('failed to fetch teachers')
             }
@@ -47,8 +57,13 @@ function Events() {
         }
     }
     const fetchClasses = async () => {
+
         try {
-            const response = await fetch('http://127.0.0.1:8000/classes/');
+            const parsedTokens = JSON.parse(savedTokens);
+
+            const response = await fetch('http://127.0.0.1:8000/classes/',{
+                headers:{ Authorization: `Bearer ${parsedTokens.access}`},
+            });
             if (!response.ok) {
                 throw new Error('could not fetch classes from the API')
             };
@@ -62,7 +77,11 @@ function Events() {
     }
     const fetchEvents = async () => {
         try {
-            const response = await fetch('http://127.0.0.1:8000/events/');
+            const parsedTokens = JSON.parse(savedTokens);
+
+            const response = await fetch('http://127.0.0.1:8000/events/',{
+                headers:{ Authorization: `Bearer ${parsedTokens.access}`},
+            });
             if (!response.ok) {
                 throw new Error('could not fetch events')
             }
@@ -86,9 +105,12 @@ function Events() {
         formData.append("date", date)
 
         try {
+            const parsedTokens = JSON.parse(savedTokens);
+
             const response = await fetch(`http://127.0.0.1:8000/events/`, {
                 method: 'POST',
-                body: formData
+                body: formData,
+                headers:{ Authorization: `Bearer ${parsedTokens.access}`},
             });
             if (!response.ok) {
                 throw new Error('could not post event')
@@ -131,10 +153,12 @@ function Events() {
         }
         formData.append('image', editEvent.image);
         console.log(formData)
+        const parsedTokens = JSON.parse(savedTokens);
 
         const response = await fetch(`http://127.0.0.1:8000/events/${editEvent.id}/`, {
             method: 'PUT',
-            body: formData
+            body: formData,
+            headers:{ Authorization: `Bearer ${parsedTokens.access}`},
         })
         if (response.ok) {
             setEditEvent(null);
@@ -144,8 +168,11 @@ function Events() {
 
     const handleDelete = async (id) => {
         if (window.confirm('are you sure u want to delete the event!')) {
+            const parsedTokens = JSON.parse(savedTokens);
+
             const response = await fetch(`http://127.0.0.1:8000/events/${id}/`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers:{ Authorization: `Bearer ${parsedTokens.access}`},
             })
             if (response.ok) {
                 fetchEvents()

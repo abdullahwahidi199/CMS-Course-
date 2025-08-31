@@ -1,4 +1,4 @@
-import { Outlet } from "react-router-dom";
+import { NavLink, Outlet } from "react-router-dom";
 import Navbar from "./components/navbar";
 
 function RootLayout(){
@@ -7,7 +7,7 @@ function RootLayout(){
         <div className="flex h-screen overflow-hidden">
             
         
-        <main className="flex-1 bg-gray-100 p-6 overflow-auto">
+        <main className="flex-1 bg-gray-100  overflow-auto">
             <Outlet/>
         </main>
         </div> 

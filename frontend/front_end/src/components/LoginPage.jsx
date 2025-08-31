@@ -5,6 +5,7 @@ import { AuthContext } from "../AuthProvider";
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [error,setError]=useState(null);
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
 
@@ -20,7 +21,7 @@ export default function LoginPage() {
       });
 
       if (!res.ok) {
-        alert("Invalid username or password");
+        setError("Invalid username or password");
         return;
       }
 
@@ -59,38 +60,73 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center h-screen bg-gray-100">
-      <form
-        onSubmit={handleLogin}
-        className="bg-white p-6 rounded-lg shadow-md w-96"
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-purple-200 via-blue-100 to-pink-200">
+  <form
+    onSubmit={handleLogin}
+    className="bg-white/80 backdrop-blur-md p-10 rounded-3xl shadow-xl w-96 flex flex-col space-y-6"
+  >
+    <h2 className="text-4xl font-extrabold text-center text-gray-800 mb-4">
+      Welcome Back
+    </h2>
+
+    {/* Username */}
+    <div className="relative">
+      <input
+        type="text"
+        id="username"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+        placeholder=" "
+        className={`peer w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-300 transition`}
+        required
+      />
+      <label
+        htmlFor="username"
+        className={`absolute left-4 text-gray-400 text-sm transition-all
+          ${username ? 'top-1 text-blue-500 text-sm' : 'top-4 text-gray-400 text-base'}
+          peer-focus:top-1 peer-focus:text-blue-500 peer-focus:text-sm
+        `}
       >
-        <h2 className="text-2xl font-bold mb-4 text-center">Login</h2>
-
-        <input
-          type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          className="w-full p-2 mb-3 border rounded"
-          required
-        />
-
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full p-2 mb-3 border rounded"
-          required
-        />
-
-        <button
-          type="submit"
-          className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
-        >
-          Login
-        </button>
-      </form>
+        Username
+      </label>
     </div>
+
+    {/* Password */}
+    <div className="relative">
+      <input
+        type="password"
+        id="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder=" "
+        className="peer w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-300 transition"
+        required
+      />
+      <label
+        htmlFor="password"
+        className={`absolute left-4 text-gray-400 text-sm transition-all
+          ${password ? 'top-1 text-blue-500 text-sm' : 'top-4 text-gray-400 text-base'}
+          peer-focus:top-1 peer-focus:text-blue-500 peer-focus:text-sm
+        `}
+      >
+        Password
+      </label>
+    </div>
+
+    <button
+      type="submit"
+      className="w-full py-3 bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold rounded-xl shadow-lg hover:from-purple-600 hover:to-blue-600 transition-all"
+    >
+      Login
+    </button>
+
+    {error && (
+      <h3 className="text-red-600 text-center font-medium mt-2">{error}</h3>
+    )}
+
+   
+  </form>
+</div>
+
   );
 }

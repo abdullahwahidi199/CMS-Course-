@@ -15,9 +15,15 @@ export default function Attendance() {
   const [message, setMessage] = useState('');
   const [classid, setClassid] = useState('')
 
+  const savedTokens=localStorage.getItem("tokens");
   const fetchClasses = async () => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/classes/`)
+      const parsedTokens=JSON.parse(savedTokens);
+      const response = await fetch(`http://127.0.0.1:8000/classes/`,{
+        headers:{
+          Authorization: `Bearer ${parsedTokens.access}`,
+        }
+      })
       if (!response.ok) {
         throw new Error('could not fetch classes')
       }
@@ -30,7 +36,12 @@ export default function Attendance() {
   }
   const fetchStudents = async () => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/students/by-class/${classid}/`);
+      const parsedTokens=JSON.parse(savedTokens);
+      const response = await fetch(`http://127.0.0.1:8000/students/by-class/${classid}/`,{
+        headers: {
+          Authorization: `Bearer ${parsedTokens.access}`,
+        }
+      });
       const data = await response.json();
       const initialAttendance = data.map(student => ({
         student_id: student.id,
@@ -60,11 +71,13 @@ export default function Attendance() {
 
 
     try {
+      const parsedTokens=JSON.parse(savedTokens);
       const response = await fetch(`http://127.0.0.1:8000/attendance/mark/${classid}/`, {
 
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${parsedTokens.access}`,
         },
         body: JSON.stringify({ date, attendance }),
       });

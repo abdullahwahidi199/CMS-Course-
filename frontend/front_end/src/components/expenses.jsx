@@ -10,13 +10,16 @@ function Expenses() {
     const [newExpense, setNewExpense] = useState({ 'name': '', 'date': '', 'amount': '', 'description': '' })
     const [financialSummary,setFinancialSummary]=useState('')
     const navigate=useNavigate()
-
+    const savedTokens = localStorage.getItem("tokens");
     const addNewExpense = async (e) => {
         e.preventDefault();
         try {
+            const parsedTokens = JSON.parse(savedTokens);
             const response = await fetch(`http://127.0.0.1:8000/expenses/`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json',
+                    Authorization: `Bearer ${parsedTokens.access}`
+                 },
                 body: JSON.stringify(newExpense)
             })
             if (!response.ok) {
@@ -32,7 +35,10 @@ function Expenses() {
     }
     const getAllExpenses = async () => {
         try {
-            const response = await fetch('http://127.0.0.1:8000/expenses/')
+            const parsedTokens = JSON.parse(savedTokens);
+            const response = await fetch('http://127.0.0.1:8000/expenses/',{
+                headers:{ Authorization: `Bearer ${parsedTokens.access}`},
+            })
             if (!response.ok) {
                 throw new Error('could not fetch expenses!')
             }
@@ -46,7 +52,10 @@ function Expenses() {
     }
 
     const getFinancialSummary=async()=>{
-        const response=await fetch('http://127.0.0.1:8000/school/financial-summary/');
+        const parsedTokens = JSON.parse(savedTokens);
+        const response=await fetch('http://127.0.0.1:8000/school/financial-summary/',{
+            headers:{ Authorization: `Bearer ${parsedTokens.access}`},
+        });
         if (response.ok){
             const data=await response.json();
             setFinancialSummary(data)

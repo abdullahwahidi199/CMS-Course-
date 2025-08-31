@@ -11,12 +11,17 @@ function IndividaulClass(){
     const [editFormDisplay,setEditFormDisplay]=useState(false)
     const [selectedRoomId, setSelectedRoomId] = useState('')
     const [rooms, setRooms] = useState([])
-
+    const savedTokens = localStorage.getItem("tokens");
     
 
     const fetchClass=async ()=>{
         try{
-            const response=await fetch(`http://127.0.0.1:8000/classes/${id}/`);
+            const parsedTokens=JSON.parse(savedTokens)
+            const response=await fetch(`http://127.0.0.1:8000/classes/${id}/`,{
+                headers:{
+                    Authorization: `Bearer ${parsedTokens.access}`,
+                }
+            });
             if (!response.ok){
                 throw new Error('could not fetch the class!');
             }
@@ -32,7 +37,12 @@ function IndividaulClass(){
    
     const fetchRooms = async () => {
         try {
-            const response = await fetch('http://127.0.0.1:8000/rooms/')
+            const parsedTokens=JSON.parse(savedTokens)
+            const response = await fetch('http://127.0.0.1:8000/rooms/',{
+                headers: {
+                    Authorization: `Bearer ${parsedTokens.access}`
+                },
+            })
             if (!response.ok) {
                 throw new Error('could not fetch Rooms!')
             }
@@ -49,8 +59,12 @@ function IndividaulClass(){
     },[id])
     const handleDelete=async ()=>{
         try{
+            const parsedTokens=JSON.parse(savedTokens);
             const response=await fetch(`http://127.0.0.1:8000/classes/${id}/`,{
                 method:'DELETE',
+                headers:{
+                    Authorization: `Bearer ${parsedTokens.access}`,
+                }
             });
             if (!response.ok){
                 throw new Error('could not delete the class!')
@@ -60,7 +74,7 @@ function IndividaulClass(){
         catch(error){
             console.error(error.message)
         }
-        navigate('/classes')
+        navigate('admin/dashboard/classes')
         fetchClass()
     }
 
@@ -86,10 +100,12 @@ function IndividaulClass(){
         //     roomOfClass:selectedRoomId
         // }
         try{
+            const parsedTokens=JSON.parse(savedTokens);
             const response=await fetch(`http://127.0.0.1:8000/classes/${id}/`,{
                 method:'PUT',
                 headers:{
                     'Content-Type':'application/json',
+                    Authorization: `Bearer ${parsedTokens.access}`,
 
                 },
                 body:JSON.stringify(updatedFields)
@@ -128,7 +144,8 @@ function IndividaulClass(){
                             <h2>{cls.endDate}</h2>
                             <h2>{cls.start_time}</h2>
                             <h2>{cls.end_time}</h2>
-                            <h2>{cls.roomOfClass.name}</h2>
+                            {cls.roomOfClass&&(<h2>{cls.roomOfClass.name}</h2>)}
+                            
                             
                             
                             
@@ -137,7 +154,7 @@ function IndividaulClass(){
                         </div>
                         <div className="inline-flex gap-2 space-x-4">
                             <button
-                                onClick={() => window.confirm('Are you sure you want to delete the student?') ? handleDelete() : navigate('/classes')}
+                                onClick={() => window.confirm('Are you sure you want to delete the student?') ? handleDelete() : navigate('/admin/dashboard/classes')}
                                 className="mt-6 inline-flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded shadow"
                             >
                                 <Trash2 size={16} /> Delete
@@ -149,7 +166,7 @@ function IndividaulClass(){
                                 <Pencil size={16} /> Edit
                             </button>
                             <button 
-                                onClick={()=>navigate('/classes')}
+                                onClick={()=>navigate('/admin/dashboard/classes')}
                                 className="inline-flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white rounded shadow px-4 py-2 mt-6"
                             >
                                 <XCircle size={16}/> Cancel

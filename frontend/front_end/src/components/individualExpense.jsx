@@ -9,10 +9,17 @@ export default function IndividualExpense() {
     const [expense, setExpense] = useState(null)
     const [editFormDisplay,setEditFormDisplay]=useState(false)
 
+
+    const savedTokens=localStorage.getItem("tokens");
     const navigate=useNavigate()
     
         const getTheExpense = async () => {
-            const response = await fetch(`http://127.0.0.1:8000/expenses/${id}/`)
+            const parsedTokens=JSON.parse(savedTokens);
+            const response = await fetch(`http://127.0.0.1:8000/expenses/${id}/`,{
+                headers: {
+                    Authorization: `Bearer ${parsedTokens.access}`,
+                },
+            })
             if (response.ok) {
                 const data = await response.json()
                 setExpense(data)
@@ -31,10 +38,12 @@ export default function IndividualExpense() {
                 updatedFields[key]=expense[key]
             }
         })
-
+        const parsedTokens=JSON.parse(savedTokens);
         const response=await fetch(`http://127.0.0.1:8000/expenses/${id}/`,{
             method:'PATCH',
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json",
+                headers: { Authorization: `Bearer ${parsedTokens.access}`}
+            },
             body: JSON.stringify(updatedFields)
         })
         
@@ -44,8 +53,12 @@ export default function IndividualExpense() {
     }
 
     const handleDelete=async ()=>{
+        const parsedTokens=JSON.parse(savedTokens);
         const response=await fetch(`http://127.0.0.1:8000/expenses/${id}/`,{
             method: 'DELETE',
+            headers:{
+                Authorization: `Bearer ${parsedTokens.access}`,
+            }
         })
         navigate('/expenses')
         getTheExpense();
@@ -78,7 +91,7 @@ export default function IndividualExpense() {
                         </div>
                         <div className="inline-flex gap-2 space-x-4">
                             <button
-                                onClick={() => window.confirm('Are you sure you want to delete the student?') ? handleDelete() : navigate('/expenses')}
+                                onClick={() => window.confirm('Are you sure you want to delete the student?') ? handleDelete() : navigate('/admin/dashboard/expenses')}
                                 className="mt-6 inline-flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded shadow"
                             >
                                 <Trash2 size={16} /> Delete
@@ -89,12 +102,12 @@ export default function IndividualExpense() {
                             >
                                 <Pencil size={16} /> Edit
                             </button>
-                            <button 
+                            {/* <button 
                                 onClick={()=>navigate('/expenses')}
                                 className="inline-flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white rounded shadow px-4 py-2 mt-6"
                             >
                                 <XCircle size={16}/> Cancel
-                            </button>
+                            </button> */}
                         </div>
                     
 
@@ -166,7 +179,7 @@ export default function IndividualExpense() {
                             </button>
                             <button
                                 
-                                onClick={()=>navigate('/expenses')}
+                                onClick={()=>navigate('/admin/dashboard/expenses')}
                                 className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded shadow flex justify-between items-center transition-colors duration-200 gap-2"
                             >
                                 <XCircle size={16}/>Cancel

@@ -2,7 +2,7 @@ from django.urls import path
 from .views import studentsApi,teachersApi,eventsApi,classApi,eventDetail,studentDetailsView,classDetailsView,teacherDetailsView,Mark_attendance_view,StudentByClassView,staffApi,staffDetailsView
 from .views import SchoolTotalEarnings,expensesApi,expenseDetailsView,FinancialSummaryView,ExpenseHistoryApiView,TimetableListView,roomApi
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from .views import UserProfileView
+from .views import UserProfileView,student_profile,teacher_profile
 urlpatterns=[
     path('students/',studentsApi),
     path('students/<int:id>/',studentDetailsView.as_view()),
@@ -26,5 +26,7 @@ urlpatterns=[
     path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/profile/", UserProfileView.as_view(), name="user_profile"),
+    path("student/profile/",student_profile, name='student-profile'),
+    path("teacher/profile/",teacher_profile,name="teacher-profile"),
    
 ] 

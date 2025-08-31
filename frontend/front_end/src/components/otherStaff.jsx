@@ -15,10 +15,16 @@ function Staff() {
     const [staff, setStaff] = useState([])
     const [editStaff, setEditStaff] = useState(null)
 
+    const savedTokens = localStorage.getItem("tokens");
 
     const fetchStaff = async () => {
         try {
-            const response = await fetch('http://127.0.0.1:8000/staff/')
+            const parsedTokens=JSON.parse(savedTokens);
+            const response = await fetch('http://127.0.0.1:8000/staff/',{
+                headers:{
+                    Authorization: `Bearer ${parsedTokens.access}`,
+                }
+            })
             if (!response.ok) {
                 throw new Error('could not fetch staff!')
             }
@@ -46,10 +52,14 @@ function Staff() {
         formData.append('photo', photo)
 
         try {
+            const parsedTokens=JSON.parse(savedTokens);
             const response = await fetch(`http://127.0.0.1:8000/staff/`, {
                 method: 'POST',
 
-                body: formData
+                body: formData,
+                headers:{
+                    Authorization: `Bearer ${parsedTokens.access}`,
+                }
             });
             if (!response.ok) {
                 throw new Error('could not add staff')
@@ -83,9 +93,13 @@ function Staff() {
         formData.append('photo', editStaff.photo)
         console.log(formData)
         try {
+            const parsedTokens=JSON.parse(savedTokens);
             const response = await fetch(`http://127.0.0.1:8000/staff/${editStaff.id}/`, {
                 method: 'PUT',
-                body: formData
+                body: formData,
+                headers:{
+                    Authorization: `Bearer ${parsedTokens.access}`,
+                }
             })
             if (!response.ok) {
                 throw new Error('could not edit staff')
@@ -99,8 +113,12 @@ function Staff() {
 
     const deleteStaff = async (id) => {
         if (window.confirm('Are you sure u want to delete?')) {
+            const parsedTokens=JSON.parse(savedTokens);
             const response = await fetch(`http://127.0.0.1:8000/staff/${id}/`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers:{
+                    Authorization: `Bearer ${parsedTokens.access}`,
+                }
             })
             if (response.ok) {
                 fetchStaff();

@@ -8,6 +8,8 @@ function Admission(){
     const [selectedClassId,setSelectedClassId]=useState(null)
     
     const navigate=useNavigate()
+    const savedTokens=localStorage.getItem("tokens");
+
     const add_student=async (e)=>{
         e.preventDefault()
 
@@ -15,10 +17,12 @@ function Admission(){
             ...newStudent,
             studentClass:selectedClassId
         }
-        
+        const parsedTokens=JSON.parse(savedTokens);
         const response=await fetch(`http://127.0.0.1:8000/students/`,{
             method:'POST',
-            headers:{'Content-Type':'application/json'},
+            headers:{'Content-Type':'application/json',
+                Authorization: `Bearer ${parsedTokens.access}`,
+            },
             body:JSON.stringify(studentData)
             
             
@@ -32,7 +36,8 @@ function Admission(){
     }
     const fetchClasses = async () => {
         try {
-            const response = await fetch('http://127.0.0.1:8000/classes/');
+            const parsedTokens=JSON.parse(savedTokens);
+            const response = await fetch('http://127.0.0.1:8000/classes/',{headers:{Authorization: `Bearer ${parsedTokens.access}`}});
             if (!response.ok) {
                 throw new Error('could not fetch classes from the API')
             };
@@ -142,7 +147,7 @@ function Admission(){
                         <button type="submit"  className="bg-blue-600 hover:bg-blue-700 active:bg-blue-600 text-white px-4 py-2 rounded inline-flex items-center gap-2">
                             <Save size={16}/>Sumbit
                         </button>
-                        <button onClick={()=>navigate('/classes')}  className="bg-gray-500 hover:bg-gray-600 active:bg-gray-500 text-white px-4 py-2 rounded inline-flex items-center gap-2">
+                        <button onClick={()=>navigate('/admin/dashboard/classes')} end className="bg-gray-500 hover:bg-gray-600 active:bg-gray-500 text-white px-4 py-2 rounded inline-flex items-center gap-2">
                             <XCircle size={16}/>Cancel
                         </button>
                     </div>

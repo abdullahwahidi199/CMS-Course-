@@ -28,25 +28,25 @@ function App() {
     createRoutesFromElements(
       <Route path='/' element={<RootLayout />}>
         
-        <Route path="login" element={<Login />} />
+        <Route index element={<Login />} />
 
         {/* Dashboards */}
         <Route path="admin/dashboard" element={
           <ProtectedRoute roles={['admin']}><AdminDashboard /></ProtectedRoute>
         } >
           <Route index element={ <HomePage />}  />
-        <Route path='attendence' element={<Attendence />} />
-        <Route path='addmission' element={ <Admission />} />
-        <Route path=':id' element={ <IndividaulStudent />} />
-        <Route path='classes' element={ <Classes />} />
-        <Route path='classes/:id' element={ <IndividaulClass />} />
-        <Route path='teachers' element={ <Teachers />} />
-        <Route path='staff' element={ <Staff />} />
-        <Route path='expenses' element={ <Expenses />} />
-        <Route path='expenses/history' element={ <ExpenseHistory />} />
-        <Route path='expenses/history/:id' element={ <IndividualExpense />} />
-        <Route path='school/timetable' element={ <Timetable />} />
-        <Route path='rooms' element={ <Rooms />} />
+          <Route path='attendence' element={<Attendence />} />
+          <Route path='addmission' element={ <Admission />} />
+          <Route path='student/:id' element={ <IndividaulStudent />} />
+          <Route path='classes' element={ <Classes />} />
+          <Route path='classes/:id' element={ <IndividaulClass />} />
+          <Route path='teachers' element={ <Teachers />} />
+          <Route path='staff' element={ <Staff />} />
+          <Route path='expenses' element={ <Expenses />} />
+          <Route path='expenses/history' element={ <ExpenseHistory />} />
+          <Route path='expenses/history/:id' element={ <IndividualExpense />} />
+          <Route path='school/timetable' element={ <Timetable />} />
+          <Route path='rooms' element={ <Rooms />} />
 
         </Route>
         <Route path="teacher/dashboard" element={

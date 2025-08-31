@@ -7,8 +7,8 @@ function Navbar() {
 
                 <ul className="space-y-2">
 
-                    <li><NavLink to='' className={({ isActive }) =>
-                        `block px-4 py-[5px] rounded hover:bg-gray-700 transition ${isActive ? 'bg-gray-700 text-white' : 'text-gray-300'
+                    <li><NavLink to='/admin/dashboard' end className={({ isActive }) =>
+                        `block px-4 py-[5px] rounded hover:bg-gray-700 transition ${isActive ? `bg-gray-700 text-white` :`text-gray-300`
                         }`
                     }>Home</NavLink></li>
 

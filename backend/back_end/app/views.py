@@ -16,6 +16,8 @@ from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from .models import ExpenseHistory
 from .serializers import ExpenseHistorySerializer,UserSerializer
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated, IsAdminUser,AllowAny
 
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
@@ -25,7 +27,7 @@ class UserProfileView(APIView):
 # Create your views here.
 @api_view(['GET','POST'])
 
-
+@permission_classes([AllowAny])
 def studentsApi(request):
     if request.method=='GET':
         students=Students.objects.all()
@@ -40,7 +42,7 @@ def studentsApi(request):
             return Response({'message':'student added successfully'})
         print(serializer.errors)
         return Response(serializer.errors,status=400)
-    
+@permission_classes([IsAuthenticated])  
 class studentDetailsView(RetrieveUpdateDestroyAPIView):
     queryset=Students.objects.all()
     serializer_class=StudentsSerializer
@@ -71,7 +73,7 @@ class studentDetailsView(RetrieveUpdateDestroyAPIView):
 
         # ✅ If it's a normal update (PUT/PATCH of other fields)
         return super().update(request, *args, **kwargs)
-    
+@permission_classes([IsAuthenticated])    
 class classDetailsView(RetrieveUpdateDestroyAPIView):
     queryset=Classes.objects.all()
     serializer_class=ClassesSerializer
@@ -80,7 +82,7 @@ class classDetailsView(RetrieveUpdateDestroyAPIView):
     def update(self, request, *args, **kwargs):
         print("patch data",request.data)
         return super().update(request, *args, **kwargs)
-    
+@permission_classes([AllowAny])
 class teacherDetailsView(RetrieveUpdateDestroyAPIView):
     queryset=Teachers.objects.all()
     serializer_class=TeachersSerializer
@@ -89,6 +91,7 @@ class teacherDetailsView(RetrieveUpdateDestroyAPIView):
 
 
 @api_view(['GET','POST'])
+# @permission_classes([IsAuthenticated])
 def teachersApi(request):
     if request.method=='GET':
         teachers=Teachers.objects.all()
@@ -100,13 +103,14 @@ def teachersApi(request):
         if serializer.is_valid():
             serializer.save()
             return Response({'message':'teacher added successfully'})
-
+        print(serializer.errors)    
         return Response(serializer.errors,status=400)
     
 
 
 
 @api_view(['GET','POST'])
+@permission_classes([IsAuthenticated])
 def classApi(request):
     if request.method=='GET':
         classes=Classes.objects.all()
@@ -279,3 +283,21 @@ class ExpenseHistoryApiView(generics.ListAPIView):
 class TimetableListView(generics.ListCreateAPIView):
     queryset = Classes.objects.all().order_by('start_time')
     serializer_class = ClassesSerializer
+
+@api_view(['GET'])
+def student_profile(request):
+    try:
+        student=request.user.student_profile
+        serializer=StudentsSerializer(student)
+        return Response(serializer.data)
+    except Students.DoesNotExist:
+        return Response({"error": "Student profile not found"}, status=404)
+    
+@api_view(["GET"])
+def teacher_profile(request):
+    try:
+        teacher=request.user.teacher_profile
+        serializer=TeachersSerializer(teacher)
+        return Response(serializer.data)
+    except Teachers.DoesNotExist:
+        return Response({"error": "Teacher profile not found"}, status=404)

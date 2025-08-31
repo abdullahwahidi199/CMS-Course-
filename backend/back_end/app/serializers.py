@@ -1,6 +1,9 @@
 from rest_framework import serializers
 from .models import Students,Teachers,Events,Classes,Attendance,Staff,Expenses,ExpenseHistory,RoomOfClass,User
 
+
+
+
 class AttendanceSerializer(serializers.ModelSerializer):
     class Meta:
         model=Attendance
@@ -10,7 +13,17 @@ class StudentsSerializer(serializers.ModelSerializer):
     attendances=AttendanceSerializer(many=True,read_only=True)
     class Meta:
         model=Students
-        fields='__all__'
+        fields=['id','name','f_name','role_number','parent_mobile_number','address','studentClass','total_fee','amount_paid','attendances']
+    
+    def create(self,validated_data):
+        user=User.objects.create_user(
+            username=validated_data['name'],
+            password=validated_data['name']+'123',
+            role='student'
+        )
+        student=Students.objects.create(user=user,**validated_data)
+        return student
+
 class RoomMiniSerializer(serializers.ModelSerializer):
     class Meta:
         model=RoomOfClass
@@ -25,6 +38,14 @@ class TeachersSerializer(serializers.ModelSerializer):
     class Meta:
         model=Teachers
         fields=['id','full_name','email_address','subject','phone_number','department','classes']
+    def create(self,validated_data):
+        user=User.objects.create_user(
+            username=validated_data['full_name'],
+            password=validated_data['full_name']+'123',
+            role='teacher'
+        )
+        teacher=Teachers.objects.create(user=user,**validated_data)
+        return teacher
 
 class EventSerializer(serializers.ModelSerializer):
     class Meta:
@@ -38,6 +59,26 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'role', 'teacher_profile', 'student_profile']
+    #     extra_kwargs = {
+    #         'password': {'write_only': True}
+    #     }
+    
+    # def create(self,validated_data):
+    #     role=validated_data.get('role')
+    #     password=validated_data.pop('password',None)
+
+    #     user=User(**validated_data)
+
+    #     if password:
+    #         user.set_password(password)
+    #     user.save()
+
+    #     if role=='teacher':
+    #         Teachers.objects.create(user=user,full_name=user.username,email_address=user.email,)
+    #     elif role=='student':
+    #         Students.objects.create(user=user,name=user.username)
+    #     return user
+
 class ClassesSerializer(serializers.ModelSerializer):
     student=StudentsSerializer(many=True, read_only=True)
     roomOfClass=RoomMiniSerializer(read_only=True)
@@ -170,7 +211,7 @@ class ExpenseHistorySerializer(serializers.ModelSerializer):
         model=ExpenseHistory
         fields='__all__'
 class RoomSerializer(serializers.ModelSerializer):
-    classes=ClassesSerializer(many=True)
+    # classes=ClassesSerializer(many=True)
     class Meta:
         model=RoomOfClass
         fields='__all__'

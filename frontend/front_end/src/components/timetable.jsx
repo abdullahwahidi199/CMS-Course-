@@ -5,8 +5,14 @@ function Timetable() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const savedTokens=localStorage.getItem("tokens");
   useEffect(() => {
-    fetch('http://localhost:8000/classes/')  // Adjust the URL as needed
+    const parsedTokens=JSON.parse(savedTokens);
+    fetch('http://localhost:8000/classes/',{
+      headers:{
+        Authorization: `Bearer ${parsedTokens.access}`
+      }
+    })  // Adjust the URL as needed
       .then((res) => {
         if (!res.ok) {
           throw new Error('Failed to fetch timetable');
