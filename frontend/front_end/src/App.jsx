@@ -6,7 +6,7 @@ import HomePage from './components/homePage';
 import Attendence from './components/attendence';
 import IndividaulStudent from './components/individualStudent';
 import Classes from './components/classes';
-import Teachers from './components/Teachers';
+import Teachers from './components/teachers';
 import Admission from './components/admission';
 import Staff from './components/otherStaff';
 import Expenses from './components/expenses';
@@ -18,10 +18,15 @@ import Rooms from './components/rooms';
 import Login from './components/loginPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminDashboard from './components/adminDashboard';
-import TeacherDashboard from './components/TeacherDashboard';
+import TeacherDashboard from './components/teacherDashboard/TeacherDashboard';
 import StudentDashboard from './components/StudentDashboard';
 import { AuthProvider } from './AuthProvider';
 import { Home } from 'lucide-react';
+import TeacherHomepage from './components/teacherDashboard/homepage';
+import Marks from './components/teacherDashboard/marks';
+import ClassDetails from './components/teacherDashboard/class';
+import Assignment from './components/teacherDashboard/individualAss';
+
 
 function App() {
   const router = createBrowserRouter(
@@ -51,7 +56,13 @@ function App() {
         </Route>
         <Route path="teacher/dashboard" element={
           <ProtectedRoute roles={['teacher']}><TeacherDashboard /></ProtectedRoute>
-        } />
+        } >
+          <Route index element={<TeacherHomepage/>}/>
+          {/* <Route path='student/give_marks' element={<Marks/>}/> */}
+          <Route path='classes/:id' element={<ClassDetails/>}/>
+          <Route path='assignment/:id' element={<Assignment/>}/>
+
+        </Route>
         <Route path="student/dashboard" element={
           <ProtectedRoute roles={['student']}><StudentDashboard /></ProtectedRoute>
         } />

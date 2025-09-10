@@ -1,8 +1,15 @@
-from django.urls import path
+from django.urls import path,include
 from .views import studentsApi,teachersApi,eventsApi,classApi,eventDetail,studentDetailsView,classDetailsView,teacherDetailsView,Mark_attendance_view,StudentByClassView,staffApi,staffDetailsView
-from .views import SchoolTotalEarnings,expensesApi,expenseDetailsView,FinancialSummaryView,ExpenseHistoryApiView,TimetableListView,roomApi
+from .views import SchoolTotalEarnings,expensesApi,expenseDetailsView,FinancialSummaryView,ExpenseHistoryApiView,TimetableListView,roomApi,MarksViewSet
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from .views import UserProfileView,student_profile,teacher_profile
+from .views import UserProfileView,student_profile,teacher_profile,AssignmetViewSet,SubmissionViewSet
+from rest_framework.routers import DefaultRouter
+
+router = DefaultRouter()
+router.register(r'marks', MarksViewSet, basename="marks")
+router.register(r'assignments',AssignmetViewSet,basename='assignments')
+router.register(r'submissions',SubmissionViewSet,basename='submissions')
+
 urlpatterns=[
     path('students/',studentsApi),
     path('students/<int:id>/',studentDetailsView.as_view()),
@@ -28,5 +35,10 @@ urlpatterns=[
     path("api/profile/", UserProfileView.as_view(), name="user_profile"),
     path("student/profile/",student_profile, name='student-profile'),
     path("teacher/profile/",teacher_profile,name="teacher-profile"),
+    # path('assignemts',AssignmetViewSet,name='assignments'),
+    # path('submissions',SubmissionViewSet,name='submissions'),
+    
+    path("", include(router.urls)),
+
    
 ] 

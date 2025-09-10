@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Students,Teachers,Events,Classes,Attendance,Staff,Expenses,ExpenseHistory,RoomOfClass,User
+from .models import Students,Teachers,Events,Classes,Attendance,Staff,Expenses,ExpenseHistory,RoomOfClass,User,Marks
+from .models import Assignment,Submission
 
 
 
@@ -9,30 +10,56 @@ class AttendanceSerializer(serializers.ModelSerializer):
         model=Attendance
         fields='__all__'
 
+
+class MarksSerializer(serializers.ModelSerializer):
+    class Meta:
+        model=Marks
+        fields='__all__'
+
 class StudentsSerializer(serializers.ModelSerializer):
     attendances=AttendanceSerializer(many=True,read_only=True)
+    marks=MarksSerializer(many=True,read_only=True)
     class Meta:
         model=Students
-        fields=['id','name','f_name','role_number','parent_mobile_number','address','studentClass','total_fee','amount_paid','attendances']
+        fields=['id','name','f_name','role_number','parent_mobile_number','address','studentClass','total_fee','amount_paid','attendances','marks']
     
     def create(self,validated_data):
         user=User.objects.create_user(
             username=validated_data['name'],
-            password=validated_data['name']+'123',
+            password=validated_data['name']+'000',
             role='student'
         )
         student=Students.objects.create(user=user,**validated_data)
         return student
+
 
 class RoomMiniSerializer(serializers.ModelSerializer):
     class Meta:
         model=RoomOfClass
         fields='__all__'
 
+class SubmissionSerializer(serializers.ModelSerializer):
+    student_name=serializers.CharField(source="student.name",read_only=True)
+
+    class Meta:
+        model=Submission
+        fields="__all__"
+        read_only_fields=("submitted_at","graded_at")
+
+class AssignmentSerializer(serializers.ModelSerializer):
+    submissions = SubmissionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Assignment
+        fields = "__all__"
+        read_only_fields = ("created_at", "created_by")
 class ClassesMiniSerialiser(serializers.ModelSerializer):
+    student=StudentsSerializer(many=True,read_only=True)
+
     class Meta:
         model=Classes
-        fields=['id','name']
+        fields=['id','name','startDate','endDate','roomOfClass','start_time','end_time','student']
+
 class TeachersSerializer(serializers.ModelSerializer):
     classes=ClassesMiniSerialiser(many=True,read_only=True)
     class Meta:
@@ -90,11 +117,12 @@ class ClassesSerializer(serializers.ModelSerializer):
     
     student_count=serializers.SerializerMethodField()
     teachers_count=serializers.SerializerMethodField()
-    
+    assignments=AssignmentSerializer(many=True,read_only=True)
     
     class Meta:
         model=Classes
-        fields=['id','name','subjects','teachers','teachers_details','startDate','endDate','student','student_count','teachers_count','total_earnings','roomOfClass','start_time','end_time']
+        fields=['id','name','subjects','teachers','teachers_details','startDate','endDate','student','student_count','teachers_count',
+                'total_earnings','roomOfClass','start_time','end_time','assignments']
 
     def get_total_earnings(self, obj):
         return obj.total_earnings()
@@ -215,7 +243,4 @@ class RoomSerializer(serializers.ModelSerializer):
     class Meta:
         model=RoomOfClass
         fields='__all__'
-# class TimeTableSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model=TimeTable
-#         fields='__all__'
+

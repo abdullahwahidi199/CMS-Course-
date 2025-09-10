@@ -189,6 +189,7 @@ function IndividaulStudent() {
               <p>{student.role_number}</p>
               <p>{student.parent_mobile_number}</p>
               <p>{student.address}</p>
+              
 
             </div>
 

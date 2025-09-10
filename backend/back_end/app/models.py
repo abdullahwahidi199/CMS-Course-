@@ -40,7 +40,7 @@ class Classes(models.Model):
     
     
         
-        
+    
     def total_earnings(self):
         return self.student.aggregate(total=models.Sum('amount_paid'))['total'] or 0
 
@@ -61,9 +61,38 @@ class Students(models.Model):
     total_fee=models.DecimalField(max_digits=10, decimal_places=2, default=0)
     amount_paid=models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
+    
     def __str__(self):
         return self.name
 
+class Marks(models.Model):
+    student=models.ForeignKey(Students,on_delete=models.CASCADE, related_name="marks")
+    marks_obtained=models.IntegerField()
+    total_marks=models.IntegerField()
+    className=models.CharField(max_length=50,null=True,blank=True)
+    exam_type=models.CharField(max_length=50, choices=[
+        ('quiz','Quiz'),
+        ('assignment','Assignment'),
+        ('midterm','Medterm'),
+        ('final','Final exam'),
+    ])
+    exam_date = models.DateField(null=True, blank=True)
+    status=models.CharField(max_length=50,choices=[
+        ('present','Present'),
+        ('absent','Absent'),
+        ('excused','Excused'),
+
+    ],
+    default='present')
+    remarks = models.TextField(null=True, blank=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+    class Meta:
+        
+        unique_together=('student','className','exam_type')
+
+    def __str__(self):
+        return f"{self.student.name} - {self.exam_type}"
+    
 
 class Events(models.Model):
     title=models.CharField(max_length=200, null=True,blank=True)
@@ -125,37 +154,29 @@ class ExpenseHistory(models.Model):
     
 
 
+class Assignment(models.Model):
+        class_assigned=models.ForeignKey(Classes,on_delete=models.CASCADE, related_name="assignments")
+        title=models.CharField(max_length=255)
+        discription=models.TextField()
+        due_date=models.DateField()
+        total_marks=models.IntegerField(default=100)
+        created_at=models.DateTimeField(auto_now_add=True)
+        created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
 
-# class TimeTable(models.Model):
-#     class_assigned=models.ForeignKey(Classes,on_delete=models.CASCADE)
-#     teacher=models.ForeignKey(Teachers,on_delete=models.CASCADE)
-#     room=models.ForeignKey(Room,on_delete=models.CASCADE)
-#     start_time=models.TimeField()
-#     end_time=models.TimeField()
+        def __str__(self):
+            return f"{self.title} - {self.class_assigned.name}"
 
-#     class Meta:
-#         unique_together=('room','start_time','end_time')
-
-#     def clean(self):
-#         teacher_conflict=TimeTable.objects.filter(
-#             teacher=self.teacher
-#         ).exclude(id=self.id).filter(
-#             start_time=self.end_time,
-#             end_time=self.start_time
-#         )
-
-#         if teacher_conflict.exists():
-#             raise ValidationError('teacher is already assigned to another class at this time!')
-        
-#         room_conflict = TimeTable.objects.filter(
-#             room=self.room,
-            
-#         ).exclude(id=self.id).filter(
-#             start_time__lt=self.end_time,
-#             end_time__gt=self.start_time
-#         )
-#         if room_conflict.exists():
-#             raise ValidationError("This room is already booked for another class at this time.")
-        
-#     def __str__(self):
-#         return f"{self.subject} - {self.class_assigned}"
+class Submission(models.Model):
+    STATUS_CHOICES=[
+        ('pending','Pending'),
+        ('submitted','Submitted'),
+        ('late','Late'),
+        ('not_submitted','Not Submitted')
+    ]
+    assignment=models.ForeignKey(Assignment,on_delete=models.CASCADE,related_name='submissions')
+    student=models.ForeignKey(Students,models.CASCADE,related_name='submissiond')
+    status=models.CharField(max_length=20,choices=STATUS_CHOICES,default='pending')
+    marks_obtained=models.FloatField(null=True,blank=True)
+    suggestion=models.TextField(null=True,blank=True)
+    submitted_at=models.DateTimeField(null=True,blank=True)
+    graded_at=models.DateTimeField(null=True,blank=True)

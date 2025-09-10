@@ -74,7 +74,7 @@ export default function Rooms() {
                                 <li key={cls.id}>{cls.name} ({cls.start_time} - {cls.end_time})</li>
                             ))
                        
-                            ):(<h2 className="text-red-600">No classes assigend</h2>)}
+                            ):(<h2 className="text-red-600">No classes assigend </h2>)}
                             
                          </ul>
                     </div>

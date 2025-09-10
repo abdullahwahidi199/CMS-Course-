@@ -45,6 +45,7 @@ function Classes() {
                 throw new Error('could not fetch classes from the API')
             };
             const data = await response.json();
+            console.log(data)
             setClasses(data)
 
         }
@@ -511,7 +512,7 @@ function Classes() {
 
                                                 <td className="text-blue-600 hover:underline -"
                                                 >
-                                                    <Link to={`admin/dashboard/student/${student.id}`} className="ml-4 inline-flex">profile & attendance{student.total_fee - student.amount_paid > 0 ? <p >🔴</p> : ''}</Link>
+                                                    <Link to={`/admin/dashboard/student/${student.id}`} className="ml-4 inline-flex">profile & attendance{student.total_fee - student.amount_paid > 0 ? <p >🔴</p> : ''}</Link>
                                                 </td>
 
                                             </tr>

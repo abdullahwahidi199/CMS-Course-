@@ -12,12 +12,20 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from rest_framework import status
 from django.db.models import Sum
+import traceback
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from .models import ExpenseHistory
 from .serializers import ExpenseHistorySerializer,UserSerializer
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes,action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser,AllowAny
+from .models import Marks,Assignment,Submission
+from .serializers import MarksSerializer,AssignmentSerializer,SubmissionSerializer
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from django.utils import timezone
+
 
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
@@ -301,3 +309,112 @@ def teacher_profile(request):
         return Response(serializer.data)
     except Teachers.DoesNotExist:
         return Response({"error": "Teacher profile not found"}, status=404)
+    
+
+
+class MarksViewSet(viewsets.ModelViewSet):
+    queryset = Marks.objects.all()
+    serializer_class = MarksSerializer
+
+    def create(self, request, *args, **kwargs):
+        if isinstance(request.data, list):
+            serializer = self.get_serializer(data=request.data, many=True)
+            serializer.is_valid(raise_exception=True)
+            self.perform_bulk_create(serializer)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        else:
+            return super().create(request, *args, **kwargs)
+
+    def perform_bulk_create(self, serializer):
+        serializer.save()
+
+    @action(detail=False, methods=["patch"])
+    def buld_update(self,request,*args,**kwargs):
+        if not isinstance(request.data,list):
+            return Response({'detail':'Expected a list of objects'},
+                             status=status.HTTP_400_BAD_REQUEST)
+        
+        updated=[]
+        errors=[]
+
+        for item in request.data:
+            try:
+                mark=Marks.objects.get(id=item['id'])
+                serializer=self.get_serializer(mark,data=item,partial=True)
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
+                updated.append(serializer.data)
+            except Exception as e:
+                errors.append({"id": item.get("id"), "error": str(e)})
+        return Response({"updated": updated, "errors": errors}, status=status.HTTP_200_OK)
+    
+class AssignmetViewSet(viewsets.ModelViewSet):
+    queryset=Assignment.objects.all()
+    serializer_class=AssignmentSerializer
+    
+    def create(self,request,*args,**kwargs):
+            try:
+
+                serializer=self.get_serializer(data=request.data)
+                serializer.is_valid(raise_exception=True)
+                assignment=serializer.save(created_by=self.request.user if request.user.is_authenticated else None)
+                print(assignment.class_assigned)
+
+                students=assignment.class_assigned.student.all()
+                print(students)
+                submissions = []
+                for s in students:
+                    submissions.append(Submission(assignment=assignment, student=s))
+                Submission.objects.bulk_create(submissions)
+
+                headers=self.get_success_headers(serializer.data)
+                return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+    
+            except Exception as e:
+                    print("ERROR in create assignment:",e)
+                    traceback.print_exc()   # prints full traceback
+                    return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+class SubmissionViewSet(viewsets.ModelViewSet):
+    queryset = Submission.objects.select_related("student", "assignment").all()
+    serializer_class = SubmissionSerializer
+    permission_classes = [IsAuthenticated]
+
+    # def get_queryset(self):
+    #     queryset = super().get_queryset()
+    #     assignment_id = self.request.query_params.get("assignment")
+    #     if assignment_id:
+    #         queryset = queryset.filter(assignment_id=assignment_id)
+    #     return queryset
+
+
+    @action(detail=False, methods=["patch"])
+    def bulk_update(self, request, *args, **kwargs):
+        """
+        Expect a list of objects: [{ "id": 12, "status":"submitted", "marks_obtained":80, "suggestion":"good"} , ...]
+        """
+        if not isinstance(request.data, list):
+            return Response({"detail": "Expected a list of updates"}, status=status.HTTP_400_BAD_REQUEST)
+
+        updated = []
+        errors = []
+        for item in request.data:
+            sid = item.get("id")
+            if not sid:
+                errors.append({"error": "missing id", "item": item})
+                continue
+            try:
+                sub = Submission.objects.get(id=sid)
+                # update fields allowed
+                sub.status = item.get("status", sub.status)
+                if sub.status == "submitted" and not sub.submitted_at:
+                    sub.submitted_at = timezone.now()
+                sub.marks_obtained = item.get("marks_obtained", sub.marks_obtained)
+                sub.suggestion = item.get("suggestion", sub.suggestion)
+                sub.graded_at = timezone.now() if item.get("marks_obtained") is not None else sub.graded_at
+                sub.save()
+                updated.append(SubmissionSerializer(sub).data)
+            except Exception as e:
+                errors.append({"id": sid, "error": str(e)})
+    
+        return Response({"updated": updated, "errors": errors}, status=status.HTTP_200_OK)
+    
