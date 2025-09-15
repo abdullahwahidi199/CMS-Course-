@@ -1,13 +1,15 @@
 import { Clipboard, Edit3, Users, Clock, User, X, Calendar, MapPin } from "lucide-react";
 import { Settings, LogOut } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect,useContext } from "react";
 import { useNavigate } from "react-router-dom";
+import { AuthContext } from "../../AuthProvider";
 export default function TeacherHomepage() {
     const [teacher, setTeacher] = useState(null);
     const tokens = JSON.parse(localStorage.getItem("tokens"));
     const [teacherProfileDisplay, setTeacherProfileDisplay] = useState(false)
     const navigate = useNavigate()
+    const {logout}=useContext(AuthContext) 
     useEffect(() => {
         const fetchProfile = async () => {
             try {
@@ -38,6 +40,10 @@ export default function TeacherHomepage() {
     const handleTeacherProfileDisplay = () => {
         setTeacherProfileDisplay(!teacherProfileDisplay)
     }
+    const handleLogout = () => {
+        logout();         
+        navigate("/login"); 
+    };
     return (
         <div>
 
@@ -98,7 +104,7 @@ export default function TeacherHomepage() {
                             Settings
                         </button>
                         <button
-                            onClick={() => alert("Logging out...")}
+                            onClick={handleLogout}
                             className="w-full flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
                         >
                             <LogOut className="w-5 h-5 mr-2" />
@@ -134,7 +140,7 @@ export default function TeacherHomepage() {
                                         <h2 className="text-lg font-semibold text-gray-800">{classInfo.name}</h2>
                                         <span className="flex items-center text-sm text-gray-500">
                                             <MapPin className="w-4 h-4 mr-1" />
-                                            Room {classInfo.roomOfClass}
+                                            Room {classInfo.roomOfClass_details && (<h2>{classInfo.roomOfClass_details.name}</h2>)}
 
                                         </span>
                                     </div>

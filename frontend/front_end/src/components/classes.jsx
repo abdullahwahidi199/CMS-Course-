@@ -285,10 +285,10 @@ function Classes() {
     const add_class = async (e) => {
 
         e.preventDefault();
-
+        console.log(selectedRoomId)
         const classData = {
             ...newClass,
-            roomOfClass: selectedRoomId
+            roomOfClass: Number(selectedRoomId)
         }
         const parsedTokens = JSON.parse(savedTokens);
         const response = await fetch(`http://127.0.0.1:8000/classes/`, {
@@ -325,7 +325,10 @@ function Classes() {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${parsedTokens.access}`,
                 },
-                body: JSON.stringify(updatedClass)
+                body: JSON.stringify({
+                ...updatedClass,
+                roomOfClass: Number(selectedRoomId)  
+            }),
             })
             if (!response.ok) {
                 let errorText = await response.text(); // <-- safer than response.json()

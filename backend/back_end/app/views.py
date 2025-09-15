@@ -46,8 +46,8 @@ def studentsApi(request):
         print(request.data)
         serializer=StudentsSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
-            return Response({'message':'student added successfully'})
+            student=serializer.save()
+            return Response(StudentsSerializer(student).data, status=201)
         print(serializer.errors)
         return Response(serializer.errors,status=400)
 @permission_classes([IsAuthenticated])  

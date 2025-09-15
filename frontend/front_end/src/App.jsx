@@ -1,6 +1,6 @@
 import './App.css';
 import './forTailwind.css';
-import { Route, createBrowserRouter, createRoutesFromElements, RouterProvider } from 'react-router-dom';
+  import { Route, createBrowserRouter, createRoutesFromElements, RouterProvider } from 'react-router-dom';
 import RootLayout from './rootLayout';
 import HomePage from './components/homePage';
 import Attendence from './components/attendence';
@@ -26,6 +26,7 @@ import TeacherHomepage from './components/teacherDashboard/homepage';
 import Marks from './components/teacherDashboard/marks';
 import ClassDetails from './components/teacherDashboard/class';
 import Assignment from './components/teacherDashboard/individualAss';
+import Reciept from './components/reciept';
 
 
 function App() {
@@ -35,7 +36,7 @@ function App() {
         
         <Route index element={<Login />} />
 
-        {/* Dashboards */}
+        
         <Route path="admin/dashboard" element={
           <ProtectedRoute roles={['admin']}><AdminDashboard /></ProtectedRoute>
         } >
@@ -52,6 +53,7 @@ function App() {
           <Route path='expenses/history/:id' element={ <IndividualExpense />} />
           <Route path='school/timetable' element={ <Timetable />} />
           <Route path='rooms' element={ <Rooms />} />
+          <Route path='reciept' element={<Reciept/>}/>
 
         </Route>
         <Route path="teacher/dashboard" element={

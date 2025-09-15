@@ -175,9 +175,9 @@ export default function ClassDetails() {
 
       <button
         onClick={handleAssignmentsDisplay}
-        className="fixed bottom-6 right-6 px-5 py-3 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-xl hover:opacity-90 transition"
+        className="fixed bottom-6 right-6 z-50 px-5 py-3 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-xl hover:opacity-90 transition"
       >
-        {assignmentsDisplay ? "Close" : "📂 Assignments"}
+         📂 Assignments
       </button>
 
       {classDetails ? (
@@ -190,7 +190,7 @@ export default function ClassDetails() {
                 {classDetails.name}
               </h2>
               <p className="text-lg font-medium opacity-90">
-                Room {classDetails.roomOfClass} • {classDetails.startDate} →{" "}
+                Room {classDetails.roomOfClass_details && (classDetails.roomOfClass_details.name)} • {classDetails.startDate} →{" "}
                 {classDetails.endDate}
               </p>
               <p className="mt-2 text-sm font-light opacity-80">
@@ -206,7 +206,7 @@ export default function ClassDetails() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {[
                 { label: "Name", value: classDetails.name },
-                { label: "Room", value: classDetails.roomOfClass },
+                { label: "Room", value: classDetails.roomOfClass_details&&(classDetails.roomOfClass_details.name)},
                 { label: "Start Date", value: classDetails.startDate },
                 { label: "End Date", value: classDetails.endDate },
                 { label: "Start Time", value: classDetails.start_time },
@@ -285,10 +285,10 @@ export default function ClassDetails() {
                       </td>
                       <td className="p-3 border">
                         <input
-                          type="text"
+                          // type="text"
                           value={marks[s.id]?.remarks || ""}
                           onChange={(e) =>
-                            handleChange(s.id, "remarks", e.target.value)
+                            handleChange(s.id, e.target.value)
                           }
                           className="w-full border rounded-lg px-2 py-1"
                           placeholder="Optional"

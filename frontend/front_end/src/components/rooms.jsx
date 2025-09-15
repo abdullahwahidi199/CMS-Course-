@@ -83,7 +83,7 @@ export default function Rooms() {
             {addRoomDisplay && (
 
                 <form
-                    onClick={(e) => addNewRoom(e)}
+                    onSubmit={addNewRoom}
                 >
                     <input type="text" name="name" value={newRoom.name} onChange={handleInfoChange}/>
                     <button type="submit">Add Room</button>

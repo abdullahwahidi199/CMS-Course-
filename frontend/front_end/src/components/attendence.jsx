@@ -131,7 +131,7 @@ export default function Attendance() {
 
           <div className="overflow-x-auto">
             <table className="min-w-full border border-gray-300 text-sm">
-              <thead className='bf-gray-150'>
+              <thead className='bg-gray-150'>
                 <tr>
                   <th className='px-4 py-2 border'>#</th>
                   <th className='px-4 py-2 border'>Student Name</th>
