@@ -11,6 +11,7 @@ function Admission() {
     const [selectedClassId, setSelectedClassId] = useState(null)
     const [showReceipt, setShowReceipt] = useState(false)
     const [savedStudent, setSavedStudent] = useState(null)
+    const [error,setError]=useState(null)
     const receiptRef = useRef();
     const navigate = useNavigate()
     const savedTokens = localStorage.getItem("tokens");
@@ -35,6 +36,8 @@ function Admission() {
         })
 
         if (!response.ok) {
+            setError("There is already a student with this name.")
+            
             throw new Error('could not add new student')
         }
         const savedData = await response.json()
@@ -101,11 +104,12 @@ function Admission() {
                     <form onSubmit={(e) => add_student(e)} className="space-y-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-[25px]">
                             <input type="text"
-                                placeholder="name"
+                                placeholder="Full name"
                                 className="border border-gray-300 p-2 rounded"
                                 name='name'
                                 value={newStudent.name}
                                 onChange={handleStudentInfo}
+                                required
 
                             />
 
@@ -116,9 +120,10 @@ function Admission() {
                                 name='f_name'
                                 value={newStudent.f_name}
                                 onChange={handleStudentInfo}
+                                required
                             />
 
-                            <select value={selectedClassId} onChange={(e) => setSelectedClassId(e.target.value)} className="border border-gray-300 p-2 rounded">
+                            <select value={selectedClassId} required onChange={(e) => setSelectedClassId(e.target.value)} className="border border-gray-300 p-2 rounded">
                                 <option value=''>Class name</option>
                                 {classes.map((cls) => (
                                     <option key={cls.id} value={cls.id}>{cls.name}</option>
@@ -130,6 +135,7 @@ function Admission() {
                                 placeholder="roll number"
                                 name='role_number'
                                 value={newStudent.role_number}
+                                required
                                 onChange={handleStudentInfo}
                                 className="border border-gray-300 p-2 rounded"
 
@@ -141,6 +147,7 @@ function Admission() {
                                 className="border border-gray-300 p-2 rounded"
                                 name='parent_mobile_number'
                                 value={newStudent.parent_mobile_number}
+                                required
                                 onChange={handleStudentInfo}
                             />
 
@@ -151,6 +158,7 @@ function Admission() {
                                 name='address'
                                 className="border border-gray-300 p-2 rounded"
                                 onChange={handleStudentInfo}
+                                required
                             />
 
 
@@ -161,7 +169,7 @@ function Admission() {
                                 name='total_fee'
                                 onChange={handleStudentInfo}
                                 className="border border-gray-300 p-2 rounded"
-
+                                required
                             />
 
                             <input
@@ -170,6 +178,7 @@ function Admission() {
                                 value={newStudent.amount_paid}
                                 name='amount_paid'
                                 onChange={handleStudentInfo}
+                                required
                                 className="border border-gray-300 p-2 rounded" />
 
                         </div>
@@ -181,6 +190,9 @@ function Admission() {
                                 <XCircle size={16} />Cancel
                             </button>
                         </div>
+                        {error && (
+                            <p className="text-red-700">{error}</p>
+                        )}
                     </form>
                 </div>
             )}

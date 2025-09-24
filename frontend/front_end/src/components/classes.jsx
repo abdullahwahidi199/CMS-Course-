@@ -21,7 +21,7 @@ function Classes() {
     const [newClass, setNewClass] = useState({ 'name': '', 'subjects': '', 'startDate': '', 'endDate': '', 'start_time': '', 'end_time': '' })
     const [selectedRoomId, setSelectedRoomId] = useState('')
     const [updatedClass, setUpdatedClass] = useState({ 'name': '', 'subjects': '', 'startDate': '', 'endDate': '', 'start_time': '', 'end_time': '' })
-    const [editClassID, setEditClassId] = useState(null)
+    // const [editClassID, setEditClassId] = useState(null)
     const [editClassDisplay, setEditClassDisplay] = useState(false)
     const [rooms, setRooms] = useState([])
 
@@ -337,7 +337,7 @@ function Classes() {
             }
             const data = await response.json();
             navigate('/classes');
-            setEditClassId(null);
+            // setEditClassId(null);
             setUpdatedClass({ 'name': '', 'subjects': '', 'startDate': '', 'endDate': '', 'start_time': '', 'end_time': '' })
             fetchClasses();
         }
@@ -421,7 +421,7 @@ function Classes() {
                             <h2 className="text-xl font-semibold">{classItem.name}</h2>
                             <Link to={`${classItem.id}`}>
                                 <button
-                                    onClick={() => setEditClassId(classItem.id)}
+                                    // onClick={() => setEditClassId(classItem.id)}
                                     className="text-sm text-blue-600 hover:underline cursor-pointer">
                                     Edit class
                                 </button></Link>
@@ -476,7 +476,7 @@ function Classes() {
 
 
                                         <button
-                                            onClick={() => window.confirm('Are u sure u want to remove the teacher') ? handleDeleteTeachers(classItem.id) : ''}
+                                            onClick={() => window.confirm('Are u sure u want to remove the teacher from the class?') ? handleDeleteTeachers(classItem.id) : ''}
                                             className="bg-green-600 text-white px-3 py-1 rounded">
                                             delete
                                         </button>
@@ -547,7 +547,7 @@ function Classes() {
 
 
 
-                            {editClassID && (
+                            {/* {editClassID && (
                                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-300">
                                     <div className="bg-white p-6 rounded-lg w-full max-w-xl shadow-lg ">
                                         <h2 className="text-xl font-bold mg-4">Edit Class</h2>
@@ -606,7 +606,7 @@ function Classes() {
                                     </div>
 
                                 </div>
-                            )}
+                            )} */}
 
 
 
@@ -629,13 +629,13 @@ function Classes() {
                         <h2 className="text-xl font-semibold mb-4">Add New Class</h2>
                         <form onSubmit={add_class} className="space-y-4">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <input name="name" value={newClass.name} onChange={handleClassesInfo} placeholder="Class name" className="border border-gray-300 p-2 rounded" />
-                                <input name="subjects" value={newClass.subjects} onChange={handleClassesInfo} placeholder="Subjects" className="border border-gray-300 p-2 rounded" />
-                                <input type="date" name="startDate" value={newClass.startDate} onChange={handleClassesInfo} className="border border-gray-300 p-2 rounded" />
-                                <input type="date" name="endDate" value={newClass.endDate} onChange={handleClassesInfo} className="border border-gray-300 p-2 rounded" />
-                                <input type="time" name='start_time' value={newClass.start_time} onChange={handleClassesInfo} className="border border-gray-300 p-2 rounded" />
-                                <input type="time" name='end_time' value={newClass.end_time} onChange={handleClassesInfo} className="border border-gray-300 p-2 rounded" />
-                                <select value={selectedRoomId} onChange={(e) => setSelectedRoomId(e.target.value)}>
+                                <input required name="name" value={newClass.name} onChange={handleClassesInfo} placeholder="Class name" className="border border-gray-300 p-2 rounded" />
+                                <input required name="subjects" value={newClass.subjects} onChange={handleClassesInfo} placeholder="Subjects" className="border border-gray-300 p-2 rounded" />
+                                <input required type="date" name="startDate" value={newClass.startDate} onChange={handleClassesInfo} className="border border-gray-300 p-2 rounded" />
+                                <input required type="date" name="endDate" value={newClass.endDate} onChange={handleClassesInfo} className="border border-gray-300 p-2 rounded" />
+                                <input required type="time" name='start_time' value={newClass.start_time} onChange={handleClassesInfo} className="border border-gray-300 p-2 rounded" />
+                                <input required type="time" name='end_time' value={newClass.end_time} onChange={handleClassesInfo} className="border border-gray-300 p-2 rounded" />
+                                <select required value={selectedRoomId} onChange={(e) => setSelectedRoomId(e.target.value)}>
                                     <option value=''>Room name</option>
 
                                     {rooms.map((room) => (

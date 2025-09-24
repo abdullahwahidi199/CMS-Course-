@@ -19,10 +19,6 @@ class MarksSerializer(serializers.ModelSerializer):
 
 
 
-class RoomMiniSerializer(serializers.ModelSerializer):
-    class Meta:
-        model=RoomOfClass
-        fields='__all__'
 
 class SubmissionSerializer(serializers.ModelSerializer):
     student_name=serializers.CharField(source="student.name",read_only=True)
@@ -39,8 +35,20 @@ class AssignmentSerializer(serializers.ModelSerializer):
         model = Assignment
         fields = "__all__"
         read_only_fields = ("created_at", "created_by")
+
+class secondClassMiniSerializer(serializers.ModelSerializer):
+    class Meta:
+        model=Classes
+        fields='__all__'
+class RoomMiniSerializer(serializers.ModelSerializer):
+    # classes=secondClassMiniSerializer(many=True,read_only=True)
+    class Meta:
+        model=RoomOfClass
+        fields='__all__'
+       
+
 class ClassesMiniSerialiser(serializers.ModelSerializer):
-    # student=StudentsSerializer(many=True,read_only=True)
+    # # student=StudentsSerializer(many=True,read_only=True)
     roomOfClass = serializers.PrimaryKeyRelatedField(
         queryset=RoomOfClass.objects.all(), required=False, allow_null=True
     )
@@ -51,6 +59,8 @@ class ClassesMiniSerialiser(serializers.ModelSerializer):
     class Meta:
         model=Classes
         fields=['id','name','startDate','endDate','roomOfClass','start_time','end_time','roomOfClass_details']
+
+
 
 class StudentsSerializer(serializers.ModelSerializer):
     attendances=AttendanceSerializer(many=True,read_only=True)
@@ -184,7 +194,7 @@ class ClassesSerializer(serializers.ModelSerializer):
            
             room_id = getattr(self.instance, 'roomOfClass_id', None)
 
-        # teachers: get list of ids
+        
         if 'teachers' in data:
             
             teachers_in = data.get('teachers')  
@@ -252,8 +262,8 @@ class ExpenseHistorySerializer(serializers.ModelSerializer):
         model=ExpenseHistory
         fields='__all__'
 class RoomSerializer(serializers.ModelSerializer):
-    # classes=ClassesSerializer(many=True)
+    classes=ClassesSerializer(many=True)
     class Meta:
         model=RoomOfClass
-        fields='__all__'
+        fields=['id','name','classes']
 

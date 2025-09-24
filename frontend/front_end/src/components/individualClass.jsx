@@ -155,7 +155,7 @@ function IndividaulClass() {
                         </div>
                         <div className="inline-flex gap-2 space-x-4">
                             <button
-                                onClick={() => window.confirm('Are you sure you want to delete the student?') ? handleDelete() : navigate('/admin/dashboard/classes')}
+                                onClick={() => window.confirm('Are you sure you want to delete the class?') ? handleDelete() : navigate('/admin/dashboard/classes')}
                                 className="mt-6 inline-flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded shadow"
                             >
                                 <Trash2 size={16} /> Delete
@@ -276,7 +276,7 @@ function IndividaulClass() {
                                 </button>
                                 <button
 
-                                    onClick={() => navigate('/expenses')}
+                                    onClick={() => navigate(-1)}
                                     className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded shadow flex justify-between items-center transition-colors duration-200 gap-2"
                                 >
                                     <XCircle size={16} />Cancel

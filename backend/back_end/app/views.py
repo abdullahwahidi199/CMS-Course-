@@ -266,6 +266,10 @@ def roomApi(request):
         
         print(serializer.errors)
         return Response(serializer.errors,status=400)
+class roomDetailsView(RetrieveUpdateDestroyAPIView):
+    queryset=RoomOfClass.objects.all()
+    serializer_class=RoomSerializer
+    lookup_field='id'
 
 class expenseDetailsView(RetrieveUpdateDestroyAPIView):
     queryset=Expenses.objects.all()
@@ -329,7 +333,7 @@ class MarksViewSet(viewsets.ModelViewSet):
         serializer.save()
 
     @action(detail=False, methods=["patch"])
-    def buld_update(self,request,*args,**kwargs):
+    def bulk_update(self,request,*args,**kwargs):
         if not isinstance(request.data,list):
             return Response({'detail':'Expected a list of objects'},
                              status=status.HTTP_400_BAD_REQUEST)
@@ -349,31 +353,36 @@ class MarksViewSet(viewsets.ModelViewSet):
         return Response({"updated": updated, "errors": errors}, status=status.HTTP_200_OK)
     
 class AssignmetViewSet(viewsets.ModelViewSet):
-    queryset=Assignment.objects.all()
-    serializer_class=AssignmentSerializer
-    
-    def create(self,request,*args,**kwargs):
-            try:
+    serializer_class = AssignmentSerializer
 
-                serializer=self.get_serializer(data=request.data)
-                serializer.is_valid(raise_exception=True)
-                assignment=serializer.save(created_by=self.request.user if request.user.is_authenticated else None)
-                print(assignment.class_assigned)
+    def get_queryset(self):
+        queryset = Assignment.objects.all()
+        class_id = self.request.query_params.get("class_id")
+        if class_id:
+            queryset = queryset.filter(class_assigned_id=class_id)
+        return queryset
 
-                students=assignment.class_assigned.student.all()
-                print(students)
-                submissions = []
-                for s in students:
-                    submissions.append(Submission(assignment=assignment, student=s))
-                Submission.objects.bulk_create(submissions)
+    def create(self, request, *args, **kwargs):
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            assignment = serializer.save(
+                created_by=self.request.user if request.user.is_authenticated else None
+            )
 
-                headers=self.get_success_headers(serializer.data)
-                return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-    
-            except Exception as e:
-                    print("ERROR in create assignment:",e)
-                    traceback.print_exc()   # prints full traceback
-                    return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # auto-create submission objects for each student
+            students = assignment.class_assigned.student.all()
+            submissions = [Submission(assignment=assignment, student=s) for s in students]
+            Submission.objects.bulk_create(submissions)
+
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+        except Exception as e:
+            print("ERROR in create assignment:", e)
+            traceback.print_exc()
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 class SubmissionViewSet(viewsets.ModelViewSet):
     queryset = Submission.objects.select_related("student", "assignment").all()
     serializer_class = SubmissionSerializer
@@ -404,7 +413,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 continue
             try:
                 sub = Submission.objects.get(id=sid)
-                # update fields allowed
+                
                 sub.status = item.get("status", sub.status)
                 if sub.status == "submitted" and not sub.submitted_at:
                     sub.submitted_at = timezone.now()

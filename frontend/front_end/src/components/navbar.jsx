@@ -55,7 +55,12 @@ function Navbar() {
                             className={({isActive})=>`block px-4 py-[5px] rounded hover:bg-gray-700 transitionn ${isActive? 'bg-gray-700 text-white}':'text-gray-300'}`}
                         >Rooms</NavLink>
                     </li>
-                    <li className="text-gray-300 px-4 py-2 hover:bg-gray-700 rounded cursor-pointer">About</li>
+                    <li>
+                        <NavLink 
+                            to='about-me'
+                            className={({isActive})=>`block px-4 py-[5px] rounded hover:bg-gray-700 transitionn ${isActive? 'bg-gray-700 text-white}':'text-gray-300'}`}
+                        >About</NavLink>
+                    </li>
                 </ul>
             </div>
             <h2 className="text-gray-400 px-4 py-4 cursor-pointer">

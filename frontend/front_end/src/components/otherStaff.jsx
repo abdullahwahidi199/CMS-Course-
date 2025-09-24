@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { HiPencil } from "react-icons/hi";
 import { Pencil, Trash2, Save, XCircle } from 'lucide-react';
+import { useNavigate } from "react-router-dom";
 
 
 function Staff() {
@@ -11,7 +12,7 @@ function Staff() {
     const [email, setEmail] = useState("")
     const [photo, setPhoto] = useState(null)
 
-
+    const navigate=useNavigate()
     const [staff, setStaff] = useState([])
     const [editStaff, setEditStaff] = useState(null)
 
@@ -62,6 +63,8 @@ function Staff() {
                 }
             });
             if (!response.ok) {
+                const erroData=await response.json()
+                console.log(erroData)
                 throw new Error('could not add staff')
             }
             const result = await response.json()
@@ -104,6 +107,8 @@ function Staff() {
             if (!response.ok) {
                 throw new Error('could not edit staff')
             }
+            fetchStaff();
+            handleFormdisplay();
         }
         catch (error) {
             console.log(error)

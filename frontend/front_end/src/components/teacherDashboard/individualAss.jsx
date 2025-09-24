@@ -11,6 +11,8 @@ export default function Assignment() {
   const [local, setLocal] = useState({});
   const savedTokens = localStorage.getItem("tokens");
   const [editingDisplay, setEditingDisplay] = useState(false)
+  const [classId,setClassId]=useState(null)
+  const [students,setStudents]=useState([])
 
 
   const [editData, setEditData] = useState({
@@ -32,6 +34,9 @@ export default function Assignment() {
       const data = await response.json();
       setAssignment(data);
       setSubmissions(data.submissions);
+      setClassId(data.class_assigned)
+      console.log(data.submissions)
+      console.log(data)
       setEditData({
         title: data.title,
         discription: data.discription,
@@ -46,6 +51,25 @@ export default function Assignment() {
   useEffect(() => {
     fetchAssignment();
   }, []);
+
+  useEffect(()=>{
+    
+    const fetchClass=async()=>{
+      const parsedTokens = JSON.parse(savedTokens);
+      const response=await fetch(`http://127.0.0.1:8000/classes/${classId}/`,{
+        headers:{
+          Authorization: `Bearer ${parsedTokens.access}`,
+        }
+      })
+
+      if (response.ok){
+        const data=await response.json();
+        setStudents(data.student)
+      }
+    }
+
+    fetchClass();
+  },[classId])
 
   const handleChange = (submissionId, field, value) => {
     setLocal((prev) => ({
@@ -253,7 +277,7 @@ export default function Assignment() {
                   className="bg-white shadow-lg rounded-2xl p-6 border border-gray-100 hover:shadow-xl transition duration-300"
                 >
                   <h2 className="text-3xl font-semibold text-gray-800 mb-10">
-                    {s.student_name}' submission
+                    {s.name}' submission
                   </h2>
 
 

@@ -9,7 +9,8 @@ function Teachers() {
     const [newTeacher, setNewTeacher] = useState({ 'full_name': '', 'phone_number': '', 'email_address': '', 'subject': '', 'department': '' })
 
     const [editTeacherId, setEditTeacherId] = useState(null)
-    const [updatedTeacher, setUpdatedTeacher] = useState({ 'full_name': '', 'phone_number': '', 'email_address': '', 'subject': '', 'department': '' })
+    const [selectedTeacherInfo,setSelectedTeacherInfo]=useState(null)
+    // const [updatedTeacher, setUpdatedTeacher] = useState({ 'full_name': '', 'phone_number': '', 'email_address': '', 'subject': '', 'department': '' })
     const savedTokens = localStorage.getItem("tokens");
     const getTeachers = async () => {
         try {
@@ -46,7 +47,7 @@ function Teachers() {
             if (!response.ok) {
                 throw new Error('could not add teacher!')
             }
-            setNewTeacher({ 'full_name': '', 'phone_number': '', 'email_address': '', 'subject': '', 'department': '' })
+            // setNewTeacher({ 'full_name': '', 'phone_number': '', 'email_address': '', 'subject': '', 'department': '' })
             getTeachers()
             handleAddTeacherDisplay();
         }
@@ -55,22 +56,50 @@ function Teachers() {
         }
 
     }
+    const getSelectedTeacher=async (teacherID)=>{
+        try{
+            const parsedTokens=JSON.parse(savedTokens);
+            const response=await fetch(`http://127.0.0.1:8000/teachers/${teacherID}`,{
+                headers:{Authorization : `Bearer ${parsedTokens.access}`}
+            })
+            console.log(teacherID)
+            if (!response.ok){
+                throw new Error("Could not get the teacher");
+            }  
+            console.log(teacherID)
+            const data=await response.json();
+            setSelectedTeacherInfo(data)
+        }
+        catch(error){
+            console.log(error)
+        }
+    }
+    // useEffect(()=>{
+    //     getSelectedTeacher();
+    // },[editTeacherId])
 
     const updateTeacher = async (e) => {
 
         e.preventDefault();
+        const payload={
+            full_name:selectedTeacherInfo.full_name,
+            phone_number:selectedTeacherInfo.phone_number,
+            email_address:selectedTeacherInfo.email_address,
+            subject:selectedTeacherInfo.subject,
+            department:selectedTeacherInfo.department
+        }
         try {
             const parsedTokens = JSON.parse(savedTokens);
             const response = await fetch(`http://127.0.0.1:8000/teachers/${editTeacherId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${parsedTokens.access}` },
-                body: JSON.stringify(updatedTeacher)
+                body: JSON.stringify(payload)
             })
             if (!response.ok) {
                 throw new Error('Could not update the teacher!')
             }
             setEditTeacherId(null);
-            setUpdatedTeacher({ 'full_name': '', 'phone_number': '', 'email_address': '', 'subject': '', 'department': '' });
+            // setUpdatedTeacher({ 'full_name': '', 'phone_number': '', 'email_address': '', 'subject': '', 'department': '' });
             getTeachers();
 
         }
@@ -112,7 +141,7 @@ function Teachers() {
 
 
     function handleEditTeacherInfoChange(e) {
-        setUpdatedTeacher(prev => ({
+        setSelectedTeacherInfo(prev => ({
             ...prev, [e.target.name]: e.target.value
         }))
     }
@@ -153,7 +182,10 @@ function Teachers() {
                         </div>
                         <div className="flex gap-2 mt-3">
                             <button
-                                onClick={() => setEditTeacherId(teacher.id)}
+                                onClick={() => {
+                                    setEditTeacherId(teacher.id)
+                                    getSelectedTeacher(teacher.id);
+                                }}
                                 className="bg-blue-500 text-white px-4 py-1 rounded hover:bg-blue-600"
                             >
                                 Edit
@@ -176,8 +208,8 @@ function Teachers() {
                                         type="text"
                                         name="full_name"
                                         className="w-full p-2 border rounded"
-                                        placeholder="Name"
-                                        value={updatedTeacher.full_name}
+                                        
+                                        value={selectedTeacherInfo?.full_name || ""}
                                         onChange={handleEditTeacherInfoChange}
                                     />
                                 
@@ -187,9 +219,9 @@ function Teachers() {
                                         required
                                         type="email"
                                         name="email_address"
-                                        placeholder="Email"
+                                        
                                         className="w-full p-2 border rounded"
-                                        value={updatedTeacher.email_address}
+                                        value={selectedTeacherInfo?.email_address || ""}
                                         onChange={handleEditTeacherInfoChange}
                                     />
                                 
@@ -197,9 +229,9 @@ function Teachers() {
                                     <input
                                         required
                                         name="subject"
-                                        placeholder="Subject(s)"
+                                        // placeholder="Subject(s)"
                                         className="w-full p-2 border rounded"
-                                        value={updatedTeacher.subject}
+                                        value={selectedTeacherInfo?.subject || ""}
                                         onChange={handleEditTeacherInfoChange}
                                     />
                                 
@@ -209,8 +241,8 @@ function Teachers() {
                                         type="tel"
                                         name="phone_number"
                                         className="w-full p-2 border rounded"
-                                        placeholder="Phone Number"
-                                        value={updatedTeacher.phone_number}
+                                        // placeholder="Phone Number"
+                                        value={selectedTeacherInfo?.phone_number ||""}
                                         onChange={handleEditTeacherInfoChange}
                                     />
                                 
@@ -219,8 +251,8 @@ function Teachers() {
                                         required
                                         name="department"
                                         className="w-full p-2 border rounded"
-                                        placeholder="Department"
-                                        value={updatedTeacher.department}
+                                        // placeholder="Department"
+                                        value={selectedTeacherInfo?.department ||""}
                                         onChange={handleEditTeacherInfoChange}
                                     />
                                 

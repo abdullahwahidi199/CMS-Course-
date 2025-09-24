@@ -19,7 +19,7 @@ import Login from './components/loginPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminDashboard from './components/adminDashboard';
 import TeacherDashboard from './components/teacherDashboard/TeacherDashboard';
-import StudentDashboard from './components/StudentDashboard';
+
 import { AuthProvider } from './AuthProvider';
 import { Home } from 'lucide-react';
 import TeacherHomepage from './components/teacherDashboard/homepage';
@@ -27,6 +27,9 @@ import Marks from './components/teacherDashboard/marks';
 import ClassDetails from './components/teacherDashboard/class';
 import Assignment from './components/teacherDashboard/individualAss';
 import Reciept from './components/reciept';
+import Homepage from './components/studentsDashboard/homepage';
+import StudentsDashboard from './components/studentsDashboard/studentDashboard';
+import About from './components/about';
 
 
 function App() {
@@ -54,6 +57,7 @@ function App() {
           <Route path='school/timetable' element={ <Timetable />} />
           <Route path='rooms' element={ <Rooms />} />
           <Route path='reciept' element={<Reciept/>}/>
+          <Route path='about-me' element={<About/>}/>
 
         </Route>
         <Route path="teacher/dashboard" element={
@@ -65,11 +69,15 @@ function App() {
           <Route path='assignment/:id' element={<Assignment/>}/>
 
         </Route>
-        <Route path="student/dashboard" element={
-          <ProtectedRoute roles={['student']}><StudentDashboard /></ProtectedRoute>
-        } />
 
-        {/* Admin routes */}
+
+        <Route path="student/dashboard" element={
+          <ProtectedRoute roles={['student']}><StudentsDashboard/></ProtectedRoute>
+        } >
+          <Route index element={<Homepage/>}/>
+        </Route>
+
+        
         
       </Route>
     )

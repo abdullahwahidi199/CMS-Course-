@@ -98,7 +98,12 @@ export default function ClassDetails() {
       const data = await response.json();
       const marksMap = {};
       data.forEach((m) => {
-        marksMap[m.student] = { id: m.id, marks_obtained: m.marks_obtained };
+        marksMap[m.student] = {
+          id: m.id,
+          marks_obtained: m.marks_obtained,
+          status: m.status,       // <-- add this
+          remarks: m.remarks,     // <-- add this
+        };
       });
       setMarks(marksMap);
     } catch (error) {
@@ -123,6 +128,8 @@ export default function ClassDetails() {
         exam_type: examType,
         marks_obtained: Number(studentMark?.marks_obtained || 0),
         total_marks: 100,
+        status: studentMark?.status || "present",   // <-- add this
+        remarks: studentMark?.remarks || "",
         className: classDetails.name,
       };
 
@@ -156,12 +163,16 @@ export default function ClassDetails() {
     fetchMarks();
   };
 
-  const handleChange = (studentID, value) => {
+  const handleChange = (studentID, field, value) => {
     setMarks({
       ...marks,
-      [studentID]: { ...marks[studentID], marks_obtained: value },
+      [studentID]: {
+        ...marks[studentID],
+        [field]: value
+      },
     });
   };
+
 
   const handleAssignmentsDisplay = () => {
     setAssignmetsDisplay(!assignmentsDisplay);
@@ -177,7 +188,7 @@ export default function ClassDetails() {
         onClick={handleAssignmentsDisplay}
         className="fixed bottom-6 right-6 z-50 px-5 py-3 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-xl hover:opacity-90 transition"
       >
-         📂 Assignments
+        📂 Assignments
       </button>
 
       {classDetails ? (
@@ -206,7 +217,7 @@ export default function ClassDetails() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {[
                 { label: "Name", value: classDetails.name },
-                { label: "Room", value: classDetails.roomOfClass_details&&(classDetails.roomOfClass_details.name)},
+                { label: "Room", value: classDetails.roomOfClass_details && (classDetails.roomOfClass_details.name) },
                 { label: "Start Date", value: classDetails.startDate },
                 { label: "End Date", value: classDetails.endDate },
                 { label: "Start Time", value: classDetails.start_time },
@@ -263,9 +274,7 @@ export default function ClassDetails() {
                       <td className="p-3 border">
                         <select
                           value={marks[s.id]?.status || "present"}
-                          onChange={(e) =>
-                            handleChange(s.id, "status", e.target.value)
-                          }
+                          onChange={(e) => handleChange(s.id, "status", e.target.value)}
                           className="border rounded px-2 py-1"
                         >
                           <option value="present">Present</option>
@@ -277,7 +286,7 @@ export default function ClassDetails() {
                         <input
                           type="number"
                           value={marks[s.id]?.marks_obtained || ""}
-                          onChange={(e) => handleChange(s.id, e.target.value)}
+                          onChange={(e) => handleChange(s.id, "marks_obtained", e.target.value)}
                           className="w-28 border border-gray-300 rounded-xl px-3 py-2 shadow-sm text-center focus:ring-2 focus:ring-indigo-400"
                           min="0"
                           max="100"
@@ -287,9 +296,7 @@ export default function ClassDetails() {
                         <input
                           // type="text"
                           value={marks[s.id]?.remarks || ""}
-                          onChange={(e) =>
-                            handleChange(s.id, e.target.value)
-                          }
+                          onChange={(e) => handleChange(s.id, "remarks", e.target.value)}
                           className="w-full border rounded-lg px-2 py-1"
                           placeholder="Optional"
                         />
@@ -316,11 +323,10 @@ export default function ClassDetails() {
         </h2>
       )}
 
-      
+
       <div
-        className={`fixed top-0 right-0 h-full w-full sm:w-96 bg-white shadow-2xl border-l border-gray-200 transform transition-transform duration-300 z-50 ${
-          assignmentsDisplay ? "translate-x-0" : "translate-x-full"
-        }`}
+        className={`fixed top-0 right-0 h-full w-full sm:w-96 bg-white shadow-2xl border-l border-gray-200 transform transition-transform duration-300 z-50 ${assignmentsDisplay ? "translate-x-0" : "translate-x-full"
+          }`}
       >
         <div className="p-6 flex flex-col h-full">
           <div className="flex justify-between items-center mb-4">
@@ -345,10 +351,10 @@ export default function ClassDetails() {
                   className="p-3 bg-gray-50 rounded-xl shadow-sm  cursor-pointer hover:bg-gray-300"
                 >
                   <Link to={`/teacher/dashboard/assignment/${a.id}`} className="flex flex-col">
-                  <span className="font-medium text-gray-800">{a.title}</span>
-                  <span className="text-sm text-gray-500">
-                    Submissions: {a.submissions.length}
-                  </span></Link>
+                    <span className="font-medium text-gray-800">{a.title}</span>
+                    <span className="text-sm text-gray-500">
+                      Submissions: {a.submissions.length}
+                    </span></Link>
                 </div>
               ))
             )}
