@@ -9,6 +9,7 @@ export default function ClassDetails() {
 
   const [marks, setMarks] = useState({});
   const [examType, setExamType] = useState("final");
+  const [exam_date,setExamDate]=useState(null)
   const [assignmentsDisplay, setAssignmetsDisplay] = useState(false);
   const [assAddFormDisplay, setAssFormDisplay] = useState(false);
   const [title, setTitle] = useState("");
@@ -38,12 +39,14 @@ export default function ClassDetails() {
       body: JSON.stringify(payload),
     });
     if (response.ok) {
-      alert("Assignment added successfully!");
+      // alert("Assignment added successfully!");
       setTitle("");
       setDescription("");
       setDueDate("");
       fetchAssignments();
+      handleAssAddFormDisplay();
     } else {
+      
       alert("Failed to add assignment.");
     }
   };
@@ -101,8 +104,8 @@ export default function ClassDetails() {
         marksMap[m.student] = {
           id: m.id,
           marks_obtained: m.marks_obtained,
-          status: m.status,       // <-- add this
-          remarks: m.remarks,     // <-- add this
+          status: m.status,       
+          remarks: m.remarks,    
         };
       });
       setMarks(marksMap);
@@ -126,9 +129,10 @@ export default function ClassDetails() {
       const payload = {
         student: s.id,
         exam_type: examType,
+        exam_date:exam_date,
         marks_obtained: Number(studentMark?.marks_obtained || 0),
         total_marks: 100,
-        status: studentMark?.status || "present",   // <-- add this
+        status: studentMark?.status || "present",   
         remarks: studentMark?.remarks || "",
         className: classDetails.name,
       };
@@ -246,6 +250,7 @@ export default function ClassDetails() {
               <h3 className="text-2xl font-bold text-gray-900 tracking-tight">
                 Enter / Update Marks
               </h3>
+              <input type='date' value={exam_date} onChange={(e)=>setExamDate(e.target.value)}/>
               <select
                 value={examType}
                 onChange={(e) => setExamType(e.target.value)}
@@ -294,7 +299,7 @@ export default function ClassDetails() {
                       </td>
                       <td className="p-3 border">
                         <input
-                          // type="text"
+                          
                           value={marks[s.id]?.remarks || ""}
                           onChange={(e) => handleChange(s.id, "remarks", e.target.value)}
                           className="w-full border rounded-lg px-2 py-1"
@@ -353,7 +358,7 @@ export default function ClassDetails() {
                   <Link to={`/teacher/dashboard/assignment/${a.id}`} className="flex flex-col">
                     <span className="font-medium text-gray-800">{a.title}</span>
                     <span className="text-sm text-gray-500">
-                      Submissions: {a.submissions.length}
+                      Click to view Submissions
                     </span></Link>
                 </div>
               ))

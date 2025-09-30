@@ -20,6 +20,8 @@ class Teachers(models.Model):
     subject=models.CharField(max_length=50)
     department=models.CharField(max_length=30,null=True,blank=True)
 
+    
+
     def __str__(self):
         return self.full_name
     
@@ -174,9 +176,14 @@ class Submission(models.Model):
         ('not_submitted','Not Submitted')
     ]
     assignment=models.ForeignKey(Assignment,on_delete=models.CASCADE,related_name='submissions')
-    student=models.ForeignKey(Students,models.CASCADE,related_name='submissiond')
+    student=models.ForeignKey(Students,models.CASCADE,related_name='submissions')
     status=models.CharField(max_length=20,choices=STATUS_CHOICES,default='pending')
     marks_obtained=models.FloatField(null=True,blank=True)
     suggestion=models.TextField(null=True,blank=True)
     submitted_at=models.DateTimeField(null=True,blank=True)
     graded_at=models.DateTimeField(null=True,blank=True)
+
+    class Meta:
+        unique_together = ("student", "assignment")  
+    def __str__(self):
+        return f"{self.student.name} - {self.assignment.title}"

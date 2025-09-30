@@ -55,6 +55,18 @@ from django.dispatch import receiver
 from .models import Expenses, ExpenseHistory
 from django.utils.timezone import is_naive, make_naive
 from decimal import Decimal
+from .models import Teachers, Students
+
+@receiver(post_delete, sender=Teachers)
+def delete_teacher_user(sender, instance, **kwargs):
+    if instance.user:
+        instance.user.delete()
+
+@receiver(post_delete, sender=Students)
+def delete_student_user(sender, instance, **kwargs):
+    if instance.user:
+        instance.user.delete()
+
 
 @receiver(pre_save, sender=Expenses)
 def store_old_expense(sender, instance, **kwargs):
@@ -115,3 +127,5 @@ def log_expense_delete(sender, instance, **kwargs):
         action='deleted',
         description=instance.description
     )
+
+

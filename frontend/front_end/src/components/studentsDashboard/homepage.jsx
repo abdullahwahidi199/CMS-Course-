@@ -21,6 +21,7 @@ export default function Homepage() {
   const [studentproDisplay, setProDisplay] = useState(false);
   const [classId, setClassID] = useState("");
   const tokens = JSON.parse(localStorage.getItem("tokens"));
+  const [marks,setMarks]=useState([]) 
 
   const { logout } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -37,6 +38,7 @@ export default function Homepage() {
       const data = await res.json();
       setStudent(data);
       setClassID(data.studentClass_details.id);
+      console.log(data)
     } catch (err) {
       console.error(err);
     }
@@ -53,6 +55,7 @@ export default function Homepage() {
       if (!response.ok) throw new Error("Could not fetch assignments!");
       const data = await response.json();
       setAssignments(data);
+      console.log(data)
     } catch (error) {
       console.log(error);
     }
@@ -77,7 +80,7 @@ export default function Homepage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      
+
       <header className="w-full flex justify-between items-center px-6 py-4 bg-white shadow">
         <h1 className="font-semibold text-xl text-gray-800">
           Welcome, {student.name}
@@ -93,11 +96,11 @@ export default function Homepage() {
         </div>
       </header>
 
-      
+
       <main className="p-6 space-y-6">
-        
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-         
+
           <div className="p-6  bg-green-200 rounded-2xl shadow-md">
             <h2 className="text-lg font-semibold text-gray-700flex items-center gap-2">
               <Calendar className="w-5 h-5 text-blue-500" /> Attendance
@@ -111,7 +114,7 @@ export default function Homepage() {
             </p>
           </div>
 
-          
+
           <div className=" bg-blue-200 -white  p-6 rounded-2xl shadow-md">
             <h2 className="text-lg font-semibold text-gray-700 flex items-center gap-2">
               <Book className="w-5 h-5 text-green-8 00" /> Class
@@ -125,12 +128,12 @@ export default function Homepage() {
               {student.studentClass_details.endDate}
             </p>
             <p className="text-sm text-gray-600 mt-2 flex items-center gap-2">
-    <Clock className="w-4 h-4 text-blue-800" />
-    {student.studentClass_details.start_time} - {student.studentClass_details.end_time}
-  </p>
+              <Clock className="w-4 h-4 text-blue-800" />
+              {student.studentClass_details.start_time} - {student.studentClass_details.end_time}
+            </p>
           </div>
 
-          
+
           <div className="bg-gray-200 p-6 rounded-2xl shadow-md">
             <h2 className="text-lg font-semibold text-gray-700 flex items-center gap-2">
               <AlertCircle className="w-5 h-5 text-red-500" /> Fee Status
@@ -145,7 +148,7 @@ export default function Homepage() {
           </div>
         </div>
 
-        
+
         <div className="bg-white p-6 rounded-2xl shadow-md">
           <h2 className="text-lg font-semibold text-gray-700 flex items-center gap-2">
             <FileText className="w-5 h-5 text-purple-500" /> Assignments
@@ -159,9 +162,41 @@ export default function Homepage() {
             {assignments.map((a) => {
               const dueDate = new Date(a.due_date);
               const isExpired = dueDate < today;
+
               const submission = a.submissions.find(
-                (s) => s.student_name === student.name
+                (s) => s.student === student.id
               );
+
+              let statusDisplay;
+
+              if (submission) {
+                if (submission.status === "graded") {
+                  statusDisplay = (
+                    <p className="flex items-center gap-2 text-green-600 font-medium">
+                      <CheckCircle className="w-5 h-5" />
+                      Graded ({submission.marks_obtained}/{a.total_marks})
+                    </p>
+                  );
+                } else if (submission.status === "pending" && !isExpired) {
+                  statusDisplay = (
+                    <p className="flex items-center gap-2 text-yellow-600 font-medium">
+                      <AlertCircle className="w-5 h-5" /> Pending
+                    </p>
+                  );
+                } else if (submission.status === "pending" && isExpired) {
+                  statusDisplay = (
+                    <p className="flex items-center gap-2 text-red-600 font-medium">
+                      <XCircle className="w-5 h-5" /> Missed
+                    </p>
+                  );
+                }
+              } else {
+                statusDisplay = (
+                  <p className="flex items-center gap-2 text-gray-500 font-medium">
+                    <Clock className="w-5 h-5" /> No Submission Found
+                  </p>
+                );
+              }
 
               return (
                 <div
@@ -174,9 +209,8 @@ export default function Homepage() {
                     <p className="text-sm mt-1">
                       Due:{" "}
                       <span
-                        className={`font-medium ${
-                          isExpired ? "text-red-500" : "text-gray-700"
-                        }`}
+                        className={`font-medium ${isExpired ? "text-red-500" : "text-gray-700"
+                          }`}
                       >
                         {a.due_date} {isExpired && "(Expired)"}
                       </span>
@@ -184,29 +218,16 @@ export default function Homepage() {
                   </div>
 
                   <div className="mt-3 md:mt-0">
-                    {submission ? (
-                      <p className="flex items-center gap-2 text-green-600 font-medium">
-                        <CheckCircle className="w-5 h-5" /> Submitted (
-                        {submission.marks_obtained}/{a.total_marks})
-                      </p>
-                    ) : isExpired ? (
-                      <p className="flex items-center gap-2 text-red-600 font-medium">
-                        <XCircle className="w-5 h-5" /> Missed
-                      </p>
-                    ) : (
-                      <p className="flex items-center gap-2 text-yellow-600 font-medium">
-                        <AlertCircle className="w-5 h-5" /> Pending
-                      </p>
-                    )}
+                    {statusDisplay}
                   </div>
                 </div>
               );
             })}
+
           </div>
         </div>
       </main>
 
-      {/* Profile Drawer */}
       <div
         className={`fixed top-0 right-0 h-full w-80 bg-white shadow-xl transform transition-transform duration-300 z-50
                 ${studentproDisplay ? "translate-x-0" : "translate-x-full"}`}

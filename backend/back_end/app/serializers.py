@@ -21,12 +21,9 @@ class MarksSerializer(serializers.ModelSerializer):
 
 
 class SubmissionSerializer(serializers.ModelSerializer):
-    student_name=serializers.CharField(source="student.name",read_only=True)
-
     class Meta:
-        model=Submission
-        fields="__all__"
-        read_only_fields=("submitted_at","graded_at")
+        model = Submission
+        fields = "__all__"
 
 class AssignmentSerializer(serializers.ModelSerializer):
     submissions = SubmissionSerializer(many=True, read_only=True)

@@ -370,9 +370,16 @@ class AssignmetViewSet(viewsets.ModelViewSet):
                 created_by=self.request.user if request.user.is_authenticated else None
             )
 
-            # auto-create submission objects for each student
-            students = assignment.class_assigned.student.all()
-            submissions = [Submission(assignment=assignment, student=s) for s in students]
+            # get all students of the class
+            students = assignment.class_assigned.student.all()  # <-- FIXED
+            submissions = [
+                Submission(
+                    assignment=assignment,
+                    student=s,
+                    status="pending"  # optional: default status
+                )
+                for s in students
+            ]
             Submission.objects.bulk_create(submissions)
 
             headers = self.get_success_headers(serializer.data)
@@ -384,46 +391,49 @@ class AssignmetViewSet(viewsets.ModelViewSet):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class SubmissionViewSet(viewsets.ModelViewSet):
-    queryset = Submission.objects.select_related("student", "assignment").all()
     serializer_class = SubmissionSerializer
-    permission_classes = [IsAuthenticated]
-
-    # def get_queryset(self):
-    #     queryset = super().get_queryset()
-    #     assignment_id = self.request.query_params.get("assignment")
-    #     if assignment_id:
-    #         queryset = queryset.filter(assignment_id=assignment_id)
-    #     return queryset
-
+    queryset = Submission.objects.all()
 
     @action(detail=False, methods=["patch"])
-    def bulk_update(self, request, *args, **kwargs):
-        """
-        Expect a list of objects: [{ "id": 12, "status":"submitted", "marks_obtained":80, "suggestion":"good"} , ...]
-        """
-        if not isinstance(request.data, list):
-            return Response({"detail": "Expected a list of updates"}, status=status.HTTP_400_BAD_REQUEST)
+    def bulk_update(self, request):
+        data = request.data
+        updated_submissions = []
 
-        updated = []
-        errors = []
-        for item in request.data:
-            sid = item.get("id")
-            if not sid:
-                errors.append({"error": "missing id", "item": item})
-                continue
-            try:
-                sub = Submission.objects.get(id=sid)
-                
-                sub.status = item.get("status", sub.status)
-                if sub.status == "submitted" and not sub.submitted_at:
-                    sub.submitted_at = timezone.now()
-                sub.marks_obtained = item.get("marks_obtained", sub.marks_obtained)
-                sub.suggestion = item.get("suggestion", sub.suggestion)
-                sub.graded_at = timezone.now() if item.get("marks_obtained") is not None else sub.graded_at
-                sub.save()
-                updated.append(SubmissionSerializer(sub).data)
-            except Exception as e:
-                errors.append({"id": sid, "error": str(e)})
-    
-        return Response({"updated": updated, "errors": errors}, status=status.HTTP_200_OK)
-    
+        for item in data:
+            submission_id = item.get("id")
+            student_id = item.get("student")
+            assignment_id = item.get("assignment")
+
+            # If submission exists, update
+            if submission_id:
+                try:
+                    submission = Submission.objects.get(id=submission_id)
+                    submission.marks_obtained = item.get("marks_obtained")
+                    submission.suggestion = item.get("suggestion", "")
+                    submission.status = item.get("status", "pending")
+                    submission.save()
+                    updated_submissions.append(submission)
+                except Submission.DoesNotExist:
+                    continue
+
+            # If new submission (id is None but student is provided)
+            elif student_id and assignment_id:
+                submission, created = Submission.objects.get_or_create(
+                    student_id=student_id,
+                    assignment_id=assignment_id,
+                    defaults={
+                        "marks_obtained": item.get("marks_obtained"),
+                        "suggestion": item.get("suggestion", ""),
+                        "status": item.get("status", "pending"),
+                    },
+                )
+                if not created:
+                    # If it already exists, update values
+                    submission.marks_obtained = item.get("marks_obtained")
+                    submission.suggestion = item.get("suggestion", "")
+                    submission.status = item.get("status", "pending")
+                    submission.save()
+                updated_submissions.append(submission)
+
+        serializer = self.get_serializer(updated_submissions, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
