@@ -169,12 +169,13 @@ function Staff() {
 
                             <div>
                                 <label className="block mb-1 font-medium">photo</label>
+                                <div>
                                 <input
-                                    type='file'
-                                    onChange={(e) => setPhoto(e.target.files[0])}
-                                    className="block mb-1 font-medium"
-                                // value={editStaff.photo}
-                                ></input>
+                                type='file'
+                                onChange={(e) => setImage(e.target.files[0])}
+                                className="block mb-1 font-medium cursor-pointer border-1 p-2 h-10 w-54"
+                            ></input>
+                            </div>
                             </div>
                             <div>
                                 <label className="block mb-1 font-medium">email</label>

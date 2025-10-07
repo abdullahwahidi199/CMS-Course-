@@ -43,12 +43,16 @@ export default function IndividualExpense() {
             method: 'PATCH',
             headers: {
                 "Content-Type": "application/json",
-                headers: { Authorization: `Bearer ${parsedTokens.access}` }
+                Authorization: `Bearer ${parsedTokens.access}` 
             },
             body: JSON.stringify(updatedFields)
         })
 
-        navigate('/expenses')
+        const data=await response.json()
+        console.log(data)
+        console.log(response)
+
+        navigate(-1)
         getTheExpense();
 
     }
@@ -61,7 +65,7 @@ export default function IndividualExpense() {
                 Authorization: `Bearer ${parsedTokens.access}`,
             }
         })
-        navigate('/expenses')
+        navigate(-1)
         getTheExpense();
     }
     const handleChange = (e) => {

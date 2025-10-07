@@ -21,7 +21,6 @@ function Classes() {
     const [newClass, setNewClass] = useState({ 'name': '', 'subjects': '', 'startDate': '', 'endDate': '', 'start_time': '', 'end_time': '' })
     const [selectedRoomId, setSelectedRoomId] = useState('')
     const [updatedClass, setUpdatedClass] = useState({ 'name': '', 'subjects': '', 'startDate': '', 'endDate': '', 'start_time': '', 'end_time': '' })
-    // const [editClassID, setEditClassId] = useState(null)
     const [editClassDisplay, setEditClassDisplay] = useState(false)
     const [rooms, setRooms] = useState([])
 
@@ -215,11 +214,6 @@ function Classes() {
 
     }
 
-    function handleAddStuFormDisplay() {
-        console.log(selectedClassId)
-        setAddStuFormDisplay(!addStuFormDisplay)
-    }
-
     function handleAddClassFormDisplay() {
         setAddClassFormDisplay(!addClassFormDisplay)
 
@@ -231,55 +225,10 @@ function Classes() {
 
     }
 
-    function handleEditClassDisplay() {
-        setEditClassDisplay(!editClassDisplay)
-    }
+    
 
 
-
-    const add_student = async (e) => {
-        e.preventDefault();
-
-        const studentData = {
-            ...newStudent,
-            studentClass: selectedClassId
-        }
-
-        try {
-
-
-            const response = await fetch(`http://127.0.0.1:8000/students/`, {
-                method: 'POST',
-
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(studentData),
-            })
-            if (!response.ok) {
-                throw new Error('hhhh')
-            }
-            const result = await response.json();
-
-
-            setNewStudent({ 'name': '', 'f_name': '', 'role_number': '', 'parent_mobile_number': '', 'address': '' })
-            fetchClasses();
-            handleAddStuFormDisplay()
-
-        }
-        catch (error) {
-            console.error(error.message)
-        }
-    }
-
-
-    // const add_teacher=async (e)=>{
-    //     e.preventDefault();
-
-    //     const teacherData={
-    //         ...newTeacher,
-
-    //     }
-
-    // }
+    
 
 
     const add_class = async (e) => {
@@ -307,75 +256,11 @@ function Classes() {
             return;
         }
         setNewClass({ 'name': '', 'subjects': '', 'startDate': '', 'endDate': '', 'start_time': '', 'end_time': '' })
-        // setRoomOfClass('')
 
     }
 
 
-
-
-
-    const updateClass = async (e) => {
-        e.preventDefault();
-        try {
-            const parsedTokens = JSON.parse(savedTokens);
-            const response = await fetch(`http://127.0.0.1:8000/classes/${editClassID}/`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${parsedTokens.access}`,
-                },
-                body: JSON.stringify({
-                ...updatedClass,
-                roomOfClass: Number(selectedRoomId)  
-            }),
-            })
-            if (!response.ok) {
-                let errorText = await response.text(); // <-- safer than response.json()
-                console.error("Server error:", errorText);
-                throw new Error('could not post the new class!');
-            }
-            const data = await response.json();
-            navigate('/classes');
-            // setEditClassId(null);
-            setUpdatedClass({ 'name': '', 'subjects': '', 'startDate': '', 'endDate': '', 'start_time': '', 'end_time': '' })
-            fetchClasses();
-        }
-
-
-        catch (error) {
-            console.error(error.message)
-        }
-    }
-
-    const handleClassDelete = async () => {
-
-        try {
-            const parsedTokens = JSON.parse(savedTokens);
-            const response = await fetch(`http://127.0.0.1:8000/classes/${editClassID}/`, {
-                method: 'DELETE',
-                headers:{
-                    Authorization: `Bearer ${parsedTokens.access}`,
-                }
-            });
-            if (!response.ok) {
-                throw new Error('could not delete the class!')
-            }
-
-        }
-        catch (error) {
-            console.error(error.message)
-        }
-        navigate('/classes')
-        setEditClassId(null)
-        fetchClasses()
-    }
-    const handleStudentInfo = (e) => {
-        setNewStudent(prev => ({
-            ...prev, [e.target.name]: e.target.value
-        }))
-
-    }
+       
     const handleClassesInfo = (e) => {
         setNewClass(prev => ({
             ...prev, [e.target.name]: e.target.value
@@ -392,12 +277,7 @@ function Classes() {
         }))
     }
 
-    const handleEditClassInfo = (e) => {
-        setUpdatedClass(prev => ({
-            ...prev, [e.target.name]: e.target.value
-        }))
-    }
-
+   
 
     return (
 
@@ -547,67 +427,6 @@ function Classes() {
 
 
 
-                            {/* {editClassID && (
-                                <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-300">
-                                    <div className="bg-white p-6 rounded-lg w-full max-w-xl shadow-lg ">
-                                        <h2 className="text-xl font-bold mg-4">Edit Class</h2>
-                                        <form onSubmit={(e) => updateClass(e)} className="space-y-4">
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                <input
-                                                    name="name"
-                                                    value={updatedClass.name}
-                                                    onChange={handleEditClassInfo}
-                                                    placeholder="Class name"
-                                                    className="border border-gray-300 p-2 rounded"
-                                                />
-                                                <input
-                                                    name="subjects"
-                                                    value={updatedClass.subjects}
-                                                    onChange={handleEditClassInfo}
-                                                    placeholder="Subjects"
-                                                    className="border border-gray-300 p-2 rounded"
-                                                />
-                                                <input
-                                                    type="date"
-                                                    name="startDate"
-                                                    value={updatedClass.startDate}
-                                                    onChange={handleEditClassInfo}
-                                                    className="border border-gray-300 p-2 rounded"
-                                                />
-                                                <input
-                                                    type="date"
-                                                    name="endDate"
-                                                    value={updatedClass.endDate}
-                                                    onChange={handleEditClassInfo}
-                                                    className="border border-gray-300 p-2 rounded"
-                                                />
-                                            </div>
-                                            <div className="flex space-x-2 mt-10 justify-center">
-                                                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded inline-flex items-center gap-2">
-                                                    <Save size={16} />Save
-                                                </button>
-                                                <button
-                                                    onClick={() => setEditClassId(null)}
-                                                    type="button"
-                                                    className="bg-gray-500 text-white px-4 py-2 rounded inline-flex items-center gap-2"
-                                                >
-                                                    <XCircle size={16} /> Cancel
-                                                </button>
-                                                <button
-                                                    onClick={() => window.confirm('Are you sure you want to delete the class?') && handleClassDelete()}
-                                                    type="button"
-                                                    className="bg-red-600 text-white px-4 py-2 rounded inline-flex gap-2 items-center"
-                                                >
-                                                    <Trash2 size={16} />Delete Class
-                                                </button>
-                                            </div>
-                                        </form>
-
-                                    </div>
-
-                                </div>
-                            )} */}
-
 
 
                         </div>
@@ -627,21 +446,66 @@ function Classes() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-300 bg-opacity-50 ">
                     <div className="bg-white p-6 rounded-lg w-full max-w-xl shadow-lg">
                         <h2 className="text-xl font-semibold mb-4">Add New Class</h2>
-                        <form onSubmit={add_class} className="space-y-4">
+                        <form onSubmit={add_class} 
+                            className="space-y-6 mt-6 bg-white p-6 rounded-2xl shadow-lg max-w-2xl mx-auto border border-gray-200">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <input required name="name" value={newClass.name} onChange={handleClassesInfo} placeholder="Class name" className="border border-gray-300 p-2 rounded" />
-                                <input required name="subjects" value={newClass.subjects} onChange={handleClassesInfo} placeholder="Subjects" className="border border-gray-300 p-2 rounded" />
-                                <input required type="date" name="startDate" value={newClass.startDate} onChange={handleClassesInfo} className="border border-gray-300 p-2 rounded" />
-                                <input required type="date" name="endDate" value={newClass.endDate} onChange={handleClassesInfo} className="border border-gray-300 p-2 rounded" />
-                                <input required type="time" name='start_time' value={newClass.start_time} onChange={handleClassesInfo} className="border border-gray-300 p-2 rounded" />
-                                <input required type="time" name='end_time' value={newClass.end_time} onChange={handleClassesInfo} className="border border-gray-300 p-2 rounded" />
-                                <select required value={selectedRoomId} onChange={(e) => setSelectedRoomId(e.target.value)}>
+                                <div className="flex flex-col">
+                                    <label className="mb-1 text-sm font-medium text-gray-700">Name</label>
+                                    <input required name="name" value={newClass.name} 
+                                    onChange={handleClassesInfo}
+                                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                                </div>
+
+                                <div className="flex flex-col">
+                                    <label className="mb-1 text-sm font-medium text-gray-700">Subjects</label>
+                                    <input required name="subjects" value={newClass.subjects} 
+                                    onChange={handleClassesInfo} 
+                                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                                </div>
+
+                                <div className="flex flex-col">
+                                    <label className="mb-1 text-sm font-medium text-gray-700">Start Date</label>
+                                    <input required type="date" name="startDate" value={newClass.startDate} 
+                                    onChange={handleClassesInfo} 
+                                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                                </div>
+
+                                <div className="flex flex-col">
+                                    <label className="mb-1 text-sm font-medium text-gray-700">End Date</label>
+                                    <input required type="date" name="endDate" value={newClass.endDate} 
+                                    onChange={handleClassesInfo} 
+                                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                                </div>
+
+                                <div className="flex flex-col">
+                                    <label className="mb-1 text-sm font-medium text-gray-700">Start Time</label>
+                                    <input required type="time" name='start_time' value={newClass.start_time} 
+                                    onChange={handleClassesInfo} 
+                                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                                </div>
+
+                                <div className="flex flex-col">
+                                    <label className="mb-1 text-sm font-medium text-gray-700">End Time</label>
+                                    <input required type="time" name='end_time' value={newClass.end_time} 
+                                    onChange={handleClassesInfo} 
+                                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                                </div>
+                                
+                                <div className="flex flex-col">
+                                    <label className="mb-1 text-sm font-medium text-gray-700">Room</label>
+                                    <select required value={selectedRoomId} onChange={(e) => setSelectedRoomId(e.target.value)}>
                                     <option value=''>Room name</option>
 
                                     {rooms.map((room) => (
                                         <option key={room.id} value={room.id}>{room.name}</option>
                                     ))}
                                 </select>
+                                </div>
+                                
+                                
+                                
+                                
+                                
                             </div>
                             <div className="flex justify-end space-x-3">
                                 <button type="submit"

@@ -1,9 +1,13 @@
 import { NavLink } from "react-router-dom"
+
 function Navbar() {
+
+    const username=localStorage.getItem('username')
+    console.log(username)
     return (
         <div className="h-full flex flex-col justify-between">
             <div className="">
-                <div className="text-2xl font-bold text-white mb-8">Admin</div>
+                <div className="text-2xl font-bold text-white mb-8">Admin,{username}</div>
 
                 <ul className="space-y-2">
 

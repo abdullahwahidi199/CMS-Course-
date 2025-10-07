@@ -7,7 +7,6 @@ export const AuthProvider = ({ children }) => {
   const [tokens, setTokens] = useState(null);
 
   useEffect(() => {
-    // restore from localStorage
     const savedTokens = localStorage.getItem("tokens");
     if (savedTokens) {
       const parsedTokens = JSON.parse(savedTokens);
@@ -20,6 +19,7 @@ export const AuthProvider = ({ children }) => {
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           console.log(data)
+          localStorage.setItem('username',data.username)
           if (data) setUser(data);
           else logout();
         });

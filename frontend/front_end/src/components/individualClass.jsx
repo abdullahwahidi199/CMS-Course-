@@ -101,7 +101,7 @@ function IndividaulClass() {
         try {
             const parsedTokens = JSON.parse(savedTokens);
             const response = await fetch(`http://127.0.0.1:8000/classes/${id}/`, {
-                method: "PATCH",  // PATCH is better for partial update
+                method: "PATCH",  
                 headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${parsedTokens.access}`,

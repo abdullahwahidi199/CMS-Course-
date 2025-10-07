@@ -251,14 +251,17 @@ function Events() {
                             />
                         </div>
 
-                        <div>
+                        <div >
                             <label className="block mb-1 font-medium">photo</label>
-                            <input
+
+                            <div>
+                                <input
                                 type='file'
-                                // value={editEvent.image}
                                 onChange={(e) => setImage(e.target.files[0])}
-                                className="block mb-1 font-medium"
+                                className="block mb-1 font-medium cursor-pointer border-1 p-2 h-10 w-54"
                             ></input>
+                            </div>
+                            
                         </div>
                         <div>
                             <label className="block mb-1 font-medium">Date</label>
