@@ -132,7 +132,7 @@ export default function TeacherHomepage() {
                                 <Link to={`classes/${classInfo.id}`}>
                                 <div
                                     
-                                    className="cursor-pointer bg-white shadow-md rounded-xl p-5 hover:shadow-xl transition transform hover:-translate-y-1"
+                                    className="cursor-pointer bg-white mb-2 shadow-md rounded-xl p-5 hover:shadow-xl transition transform hover:-translate-y-1"
                                     key={classInfo.id}
                                 >
 

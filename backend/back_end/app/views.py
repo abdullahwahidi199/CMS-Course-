@@ -38,7 +38,7 @@ class UserProfileView(APIView):
 @permission_classes([AllowAny])
 def studentsApi(request):
     if request.method=='GET':
-        students=Students.objects.all()
+        students=Students.objects.select_related("studentClass").prefetch_related("marks").prefetch_related("submissions").prefetch_related("attendances").all()
         serializer=StudentsSerializer(students,many=True)
         return Response(serializer.data)
 
@@ -102,7 +102,7 @@ class teacherDetailsView(RetrieveUpdateDestroyAPIView):
 # @permission_classes([IsAuthenticated])
 def teachersApi(request):
     if request.method=='GET':
-        teachers=Teachers.objects.all()
+        teachers=Teachers.objects.prefetch_related("classes").all()
         serializer=TeachersSerializer(teachers,many=True)
         return Response(serializer.data)
 
@@ -121,7 +121,7 @@ def teachersApi(request):
 @permission_classes([IsAuthenticated])
 def classApi(request):
     if request.method=='GET':
-        classes=Classes.objects.all()
+        classes=Classes.objects.select_related("roomOfClass").prefetch_related("teachers").prefetch_related("student").prefetch_related("attendances").prefetch_related("assignments").all()
         serializer=ClassesSerializer(classes,many=True)
         return Response(serializer.data)
     if request.method=='POST':
@@ -255,7 +255,7 @@ def expensesApi(request):
 @api_view(['GET','POST'])
 def roomApi(request):
     if request.method=='GET':
-        rooms=RoomOfClass.objects.all()
+        rooms=RoomOfClass.objects.prefetch_related("classes").all()
         serializer=RoomSerializer(rooms,many=True)
         return Response(serializer.data)
     if request.method=='POST':
@@ -317,7 +317,7 @@ def teacher_profile(request):
 
 
 class MarksViewSet(viewsets.ModelViewSet):
-    queryset = Marks.objects.all()
+    queryset = Marks.objects.select_related("student")
     serializer_class = MarksSerializer
 
     def create(self, request, *args, **kwargs):
@@ -356,7 +356,7 @@ class AssignmetViewSet(viewsets.ModelViewSet):
     serializer_class = AssignmentSerializer
 
     def get_queryset(self):
-        queryset = Assignment.objects.all()
+        queryset = Assignment.objects.select_related("class_assigned").prefetch_related("submissions").all()
         class_id = self.request.query_params.get("class_id")
         if class_id:
             queryset = queryset.filter(class_assigned_id=class_id)
@@ -392,7 +392,7 @@ class AssignmetViewSet(viewsets.ModelViewSet):
 
 class SubmissionViewSet(viewsets.ModelViewSet):
     serializer_class = SubmissionSerializer
-    queryset = Submission.objects.all()
+    queryset = Submission.objects.select_related("assignment").select_related("student").all()
 
     @action(detail=False, methods=["patch"])
     def bulk_update(self, request):

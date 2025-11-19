@@ -1,13 +1,31 @@
+import { useState,useEffect } from "react"
 import { NavLink } from "react-router-dom"
 
 function Navbar() {
 
-    const username=localStorage.getItem('username')
+    const [username,setUsername]=useState(null)
+    useEffect(() => {
+        const savedTokens = localStorage.getItem("tokens");
+        if (savedTokens) {
+          const parsedTokens = JSON.parse(savedTokens);
+          fetch("http://127.0.0.1:8000/api/profile/", {
+            headers: {
+              Authorization: `Bearer ${parsedTokens.access}`,
+            },
+          })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+              console.log(data)
+              if (data) setUsername(data.username);
+              else logout();
+            });
+        }
+      }, []);
     console.log(username)
     return (
         <div className="h-full flex flex-col justify-between">
             <div className="">
-                <div className="text-2xl font-bold text-white mb-8">Admin,{username}</div>
+                <div className="text-2xl font-bold text-white mb-8">Admin, {username}</div>
 
                 <ul className="space-y-2">
 

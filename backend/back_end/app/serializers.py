@@ -149,11 +149,12 @@ class ClassesSerializer(serializers.ModelSerializer):
     
         
     
-    def get_student_count(self,obj):
-        print(obj)
-        return obj.student.count()
-    def get_teachers_count(self,obj):
-        return obj.teachers.count()
+    def get_student_count(self, obj):
+        return len(obj.student.all())
+
+    def get_teachers_count(self, obj):
+        return len(obj.teachers.all())
+
     
     def update(self,instance,validated_data):
         new_teachers=validated_data.pop('teachers',[])
@@ -259,7 +260,7 @@ class ExpenseHistorySerializer(serializers.ModelSerializer):
         model=ExpenseHistory
         fields='__all__'
 class RoomSerializer(serializers.ModelSerializer):
-    classes=ClassesSerializer(many=True)
+    classes=ClassesSerializer(many=True,required=False)
     class Meta:
         model=RoomOfClass
         fields=['id','name','classes']
