@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
+import instance from "../api/axiosInstance";
 
 function Navbar() {
   const [username, setUsername] = useState(null);
