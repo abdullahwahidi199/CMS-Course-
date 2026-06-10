@@ -1,78 +1,78 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
+import instance from "../api/axiosInstance";
 
 function Timetable() {
   const [classes, setClasses] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const savedTokens=localStorage.getItem("tokens");
+  const savedTokens = localStorage.getItem("tokens");
   useEffect(() => {
-    const parsedTokens=JSON.parse(savedTokens);
-    fetch('http://localhost:8000/classes/',{
-      headers:{
-        Authorization: `Bearer ${parsedTokens.access}`
-      }
-    })  // Adjust the URL as needed
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error('Failed to fetch timetable');
-        }
-        return res.json();
-      })
-      .then((data) => {
-        setClasses(data);
-        console.log(data)
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
+    const parsedTokens = JSON.parse(savedTokens);
+    try {
+      setLoading(true);
+      const reponse = instance.get("/classes/");
+      setClasses(reponse.date);
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  if (loading) return <div className='flex justify-center items-center'><div id="🤚">
-	<div id="👉"></div>
-	<div id="👉"></div>
-	<div id="👉"></div>
-	<div id="👉"></div>
-	<div id="🌴"></div>		
-	<div id="👍"></div>
-</div></div>;
+  if (loading)
+    return (
+      <div className="flex justify-center items-center">
+        <div id="🤚">
+          <div id="👉"></div>
+          <div id="👉"></div>
+          <div id="👉"></div>
+          <div id="👉"></div>
+          <div id="🌴"></div>
+          <div id="👍"></div>
+        </div>
+      </div>
+    );
   if (error) return <div>Error: {error}</div>;
 
   return (
     <div>
-        {classes.length>0 &&(
-            <div>
-      <h1>School Timetable</h1>
-      <table className='min-w-full text-sm border border-gray-300'>
-        <thead className='bf-gray-150'>
-          <tr>
-            <th className='px-4 py-2 border'>Class Name</th>
-            <th className='px-4 py-2 border'>Start Time</th>
-            <th className='px-4 py-2 border'>End Time</th>
-            {/* <th className='px-4 py-2 border'>Room</th> */}
-            <th className='px-4 py-2 border'>Teachers</th>
-          </tr>
-        </thead>
-        <tbody>
-          {classes.map((cls) => (
-            <tr key={cls.id}>
-              <td className='px-4 py-2 border text-center'>{cls.name}</td>
-              <td className='px-4 py-2 border text-center'>{cls.start_time}</td>
-              <td className='px-4 py-2 border text-center'>{cls.end_time}</td>
-              {/* <td className='px-4 py-2 border text-center'>{cls.roomOfClass.name}</td> */}
-              <td className='px-4 py-2 border text-center'>
-                {cls.teachers_details.map((teacher) => teacher.full_name).join(', ')}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {classes.length > 0 && (
+        <div>
+          <h1>School Timetable</h1>
+          <table className="min-w-full text-sm border border-gray-300">
+            <thead className="bf-gray-150">
+              <tr>
+                <th className="px-4 py-2 border">Class Name</th>
+                <th className="px-4 py-2 border">Start Time</th>
+                <th className="px-4 py-2 border">End Time</th>
+                {/* <th className='px-4 py-2 border'>Room</th> */}
+                <th className="px-4 py-2 border">Teachers</th>
+              </tr>
+            </thead>
+            <tbody>
+              {classes.map((cls) => (
+                <tr key={cls.id}>
+                  <td className="px-4 py-2 border text-center">{cls.name}</td>
+                  <td className="px-4 py-2 border text-center">
+                    {cls.start_time}
+                  </td>
+                  <td className="px-4 py-2 border text-center">
+                    {cls.end_time}
+                  </td>
+                  {/* <td className='px-4 py-2 border text-center'>{cls.roomOfClass.name}</td> */}
+                  <td className="px-4 py-2 border text-center">
+                    {cls.teachers_details
+                      .map((teacher) => teacher.full_name)
+                      .join(", ")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
-        )}
-    </div>
-     
   );
 }
 
