@@ -17,7 +17,7 @@ export default function LoginPage() {
 
     try {
       // Get tokens
-      const tokenRes = await instance.post("/api/token/", {
+      const tokenRes = await instance.post("/token/", {
         username,
         password,
       });
@@ -27,7 +27,7 @@ export default function LoginPage() {
       localStorage.setItem("tokens", JSON.stringify(tokens));
 
       // Fetch profile
-      const profileRes = await instance.get("/api/profile/");
+      const profileRes = await instance.get("/profile/");
       const profile = profileRes.data;
       console.log(profile);
 
