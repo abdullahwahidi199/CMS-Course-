@@ -1,4 +1,5 @@
 import { createContext, useState, useEffect } from "react";
+import instance from "./api/axiosInstance";
 
 export const AuthContext = createContext();
 
@@ -7,23 +8,29 @@ export const AuthProvider = ({ children }) => {
   const [tokens, setTokens] = useState(null);
 
   useEffect(() => {
-    const savedTokens = localStorage.getItem("tokens");
-    if (savedTokens) {
-      const parsedTokens = JSON.parse(savedTokens);
-      setTokens(parsedTokens);
-      fetch("http://127.0.0.1:8000/api/profile/", {
-        headers: {
-          Authorization: `Bearer ${parsedTokens.access}`,
-        },
-      })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          console.log(data)
-          localStorage.setItem('username',data.username)
-          if (data) setUser(data);
-          else logout();
-        });
-    }
+    const loadProfile = async () => {
+      const savedTokens = localStorage.getItem("tokens");
+
+      if (!savedTokens) return;
+
+      try {
+        const parsedTokens = JSON.parse(savedTokens);
+        setTokens(parsedTokens);
+
+        const res = await instance.get("/api/profile/");
+        const data = res.data;
+
+        console.log(data);
+
+        localStorage.setItem("username", data.username);
+        setUser(data);
+      } catch (error) {
+        console.error(error);
+        logout();
+      }
+    };
+
+    loadProfile();
   }, []);
 
   const login = (tokens, profile) => {
@@ -36,6 +43,7 @@ export const AuthProvider = ({ children }) => {
     setTokens(null);
     setUser(null);
     localStorage.removeItem("tokens");
+    localStorage.removeItem("username");
   };
 
   return (

@@ -1,7 +1,8 @@
 from django.contrib import admin
 from .models import Students,Teachers,Events,Classes,Attendance,Staff,Expenses,ExpenseHistory,RoomOfClass,User,Marks,Assignment,Submission
-
+from .models import Tenant
 # Register your models here.
+admin.site.register(Tenant),
 admin.site.register(Students),
 admin.site.register(Teachers),
 admin.site.register(Events),

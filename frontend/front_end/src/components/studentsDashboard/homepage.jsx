@@ -10,35 +10,28 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  Clock
+  Clock,
 } from "lucide-react";
 import { AuthContext } from "../../AuthProvider";
 import { useNavigate } from "react-router-dom";
+import instance from "../../api/axiosInstance";
 
 export default function Homepage() {
   const [student, setStudent] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [studentproDisplay, setProDisplay] = useState(false);
   const [classId, setClassID] = useState("");
-  const tokens = JSON.parse(localStorage.getItem("tokens"));
-  const [marks,setMarks]=useState([]) 
+  const [marks, setMarks] = useState([]);
 
   const { logout } = useContext(AuthContext);
   const navigate = useNavigate();
 
   const fetchProfile = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/student/profile/", {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${tokens.access}`,
-        },
-      });
-      if (!res.ok) throw new Error("Failed to fetch student profile");
-      const data = await res.json();
+      const res = await instance.get("/student/profile/");
+      const data = res.data;
       setStudent(data);
       setClassID(data.studentClass_details.id);
-      console.log(data)
     } catch (err) {
       console.error(err);
     }
@@ -46,16 +39,8 @@ export default function Homepage() {
 
   const fetchAssignments = async () => {
     try {
-      const response = await fetch(
-        `http://127.0.0.1:8000/assignments/?class_id=${classId}`,
-        {
-          headers: { Authorization: `Bearer ${tokens.access}` },
-        }
-      );
-      if (!response.ok) throw new Error("Could not fetch assignments!");
-      const data = await response.json();
-      setAssignments(data);
-      console.log(data)
+      const response = await instance.get(`/assignments/?class_id=${classId}`);
+      setAssignments(response.data);
     } catch (error) {
       console.log(error);
     }
@@ -80,7 +65,6 @@ export default function Homepage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-
       <header className="w-full flex justify-between items-center px-6 py-4 bg-white shadow">
         <h1 className="font-semibold text-xl text-gray-800">
           Welcome, {student.name}
@@ -96,11 +80,8 @@ export default function Homepage() {
         </div>
       </header>
 
-
       <main className="p-6 space-y-6">
-
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-
           <div className="p-6  bg-green-200 rounded-2xl shadow-md">
             <h2 className="text-lg font-semibold text-gray-700flex items-center gap-2">
               <Calendar className="w-5 h-5 text-blue-500" /> Attendance
@@ -109,11 +90,9 @@ export default function Homepage() {
               {student.attendances.length > 0
                 ? student.attendances.filter((a) => a.is_present).length
                 : 0}
-              /
-              {student.attendances.length} days
+              /{student.attendances.length} days
             </p>
           </div>
-
 
           <div className=" bg-blue-200 -white  p-6 rounded-2xl shadow-md">
             <h2 className="text-lg font-semibold text-gray-700 flex items-center gap-2">
@@ -129,10 +108,10 @@ export default function Homepage() {
             </p>
             <p className="text-sm text-gray-600 mt-2 flex items-center gap-2">
               <Clock className="w-4 h-4 text-blue-800" />
-              {student.studentClass_details.start_time} - {student.studentClass_details.end_time}
+              {student.studentClass_details.start_time} -{" "}
+              {student.studentClass_details.end_time}
             </p>
           </div>
-
 
           <div className="bg-gray-200 p-6 rounded-2xl shadow-md">
             <h2 className="text-lg font-semibold text-gray-700 flex items-center gap-2">
@@ -147,7 +126,6 @@ export default function Homepage() {
             )}
           </div>
         </div>
-
 
         <div className="bg-white p-6 rounded-2xl shadow-md">
           <h2 className="text-lg font-semibold text-gray-700 flex items-center gap-2">
@@ -164,7 +142,7 @@ export default function Homepage() {
               const isExpired = dueDate < today;
 
               const submission = a.submissions.find(
-                (s) => s.student === student.id
+                (s) => s.student === student.id,
               );
 
               let statusDisplay;
@@ -209,21 +187,19 @@ export default function Homepage() {
                     <p className="text-sm mt-1">
                       Due:{" "}
                       <span
-                        className={`font-medium ${isExpired ? "text-red-500" : "text-gray-700"
-                          }`}
+                        className={`font-medium ${
+                          isExpired ? "text-red-500" : "text-gray-700"
+                        }`}
                       >
                         {a.due_date} {isExpired && "(Expired)"}
                       </span>
                     </p>
                   </div>
 
-                  <div className="mt-3 md:mt-0">
-                    {statusDisplay}
-                  </div>
+                  <div className="mt-3 md:mt-0">{statusDisplay}</div>
                 </div>
               );
             })}
-
           </div>
         </div>
       </main>
@@ -249,9 +225,13 @@ export default function Homepage() {
           <h3 className="mt-3 text-lg font-semibold text-gray-800">
             {student.name}
           </h3>
-          <p className="text-sm text-gray-600">Roll No: {student.role_number}</p>
+          <p className="text-sm text-gray-600">
+            Roll No: {student.role_number}
+          </p>
           <p className="text-sm text-gray-600">Father: {student.f_name}</p>
-          <p className="text-sm text-gray-600">📞 {student.parent_mobile_number}</p>
+          <p className="text-sm text-gray-600">
+            📞 {student.parent_mobile_number}
+          </p>
           <p className="text-sm text-gray-600 flex items-center gap-1">
             <MapPin className="w-4 h-4" /> {student.address}
           </p>

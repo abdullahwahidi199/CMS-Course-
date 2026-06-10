@@ -2,11 +2,13 @@ import { useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../AuthProvider";
 import { Eye, EyeOff } from "lucide-react";
+import instance from "../api/axiosInstance";
+
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword,setShowPassword]=useState(false)
-  const [error,setError]=useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState(null);
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
 
@@ -14,37 +16,27 @@ export default function LoginPage() {
     e.preventDefault();
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/token/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+      // Get tokens
+      const tokenRes = await instance.post("/api/token/", {
+        username,
+        password,
       });
+      const tokens = tokenRes.data;
 
-      if (!res.ok) {
-        setError("Invalid username or password");
-        return;
-      }
+      // Save tokens FIRST so the interceptor can use them for the profile call
+      localStorage.setItem("tokens", JSON.stringify(tokens));
 
-      const tokens = await res.json();
-
-      const profileRes = await fetch("http://127.0.0.1:8000/api/profile/", {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${tokens.access}`,
-        },
-      });
-
-      if (!profileRes.ok) {
-        alert("Could not fetch profile");
-        return;
-      }
-
-      const profile = await profileRes.json();
-      console.log(profile)
+      // Fetch profile
+      const profileRes = await instance.get("/api/profile/");
+      const profile = profileRes.data;
+      console.log(profile);
 
       login(tokens, profile);
 
-      if (profile.role === "admin") {
+      if (profile.role === "super_admin") {
+        navigate("/super-admin/dashboard");
+        return;
+      } else if (profile.role === "admin") {
         navigate("/admin/dashboard");
       } else if (profile.role === "teacher") {
         navigate("/teacher/dashboard");
@@ -53,7 +45,11 @@ export default function LoginPage() {
       }
     } catch (err) {
       console.error("Login error:", err);
-      alert("Something went wrong during login.");
+      if (err.response?.status === 401 || err.response?.status === 400) {
+        setError("Invalid username or password");
+      } else {
+        alert("Something went wrong during login.");
+      }
     }
   };
 
@@ -80,9 +76,10 @@ export default function LoginPage() {
           <label
             htmlFor="username"
             className={`absolute left-1 text-gray-500 text-base transition-all duration-200
-              ${username
-                ? "-top-3 text-sm text-blue-600"
-                : "top-2 text-gray-400 text-base"
+              ${
+                username
+                  ? "-top-3 text-sm text-blue-600"
+                  : "top-2 text-gray-400 text-base"
               }
               peer-focus:-top-3 peer-focus:text-sm peer-focus:text-blue-600`}
           >
@@ -103,9 +100,10 @@ export default function LoginPage() {
           <label
             htmlFor="password"
             className={`absolute left-1 text-gray-500 text-base transition-all duration-200
-              ${password
-                ? "-top-3 text-sm text-blue-600"
-                : "top-2 text-gray-400 text-base"
+              ${
+                password
+                  ? "-top-3 text-sm text-blue-600"
+                  : "top-2 text-gray-400 text-base"
               }
               peer-focus:-top-3 peer-focus:text-sm peer-focus:text-blue-600`}
           >
@@ -121,7 +119,6 @@ export default function LoginPage() {
           </button>
         </div>
 
-       
         <button
           type="submit"
           className="w-full py-2.5 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 transition"
@@ -132,8 +129,6 @@ export default function LoginPage() {
         {error && (
           <p className="text-red-600 text-center mt-3 text-sm">{error}</p>
         )}
-
-        
       </form>
     </div>
   );

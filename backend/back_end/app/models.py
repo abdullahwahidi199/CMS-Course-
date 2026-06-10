@@ -3,16 +3,54 @@ from django.db.models import Sum
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import AbstractUser
+from django.db.models import Max
 # Create your models here.
+
+class Tenant(models.Model):
+    name = models.CharField(max_length=200)
+    logo = models.ImageField(
+        upload_to="logos/",
+        null=True,
+        blank=True
+    )
+
+    phone = models.CharField(max_length=20, blank=True)
+    email = models.EmailField(blank=True)
+    address = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    subscription_expiry = models.DateField(
+    null=True,
+    blank=True
+)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
 
 class User(AbstractUser):
     ROLE_CHOICES = (
+        ('super_admin', 'Super Admin'),
         ('admin', 'Admin'),
         ('teacher', 'Teacher'),
         ('student', 'Student'),
     )
-    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student')
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name='users',
+        null=True,
+        blank=True
+    )
+    role = models.CharField(max_length=15, choices=ROLE_CHOICES, default='student')
 class Teachers(models.Model):
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name='teachers',
+        null=True,
+        blank=True
+    )
     full_name=models.CharField(max_length=150)
     phone_number=models.CharField(max_length=20)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="teacher_profile")
@@ -27,10 +65,24 @@ class Teachers(models.Model):
     
 
 class RoomOfClass(models.Model):
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name='roomsOFClasses',
+        null=True,
+        blank=True
+    )
     name=models.CharField(max_length=100,default='Room A')
     
 
 class Classes(models.Model):
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name='classes',
+        null=True,
+        blank=True
+    )
     name=models.CharField(max_length=100)
     roomOfClass=models.ForeignKey(RoomOfClass,on_delete=models.CASCADE,related_name='classes',null=True,blank=True)
     teachers=models.ManyToManyField(Teachers,related_name='classes',blank=True)
@@ -45,13 +97,21 @@ class Classes(models.Model):
     
     def total_earnings(self):
         return self.student.aggregate(total=models.Sum('amount_paid'))['total'] or 0
-
+    
+    
     def __str__(self):
         return self.name
 
 
     
 class Students(models.Model):
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name='students',
+        null=True,
+        blank=True
+    )
     name=models.CharField(max_length=100)
     f_name=models.CharField(max_length=100)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="student_profile")
@@ -59,15 +119,36 @@ class Students(models.Model):
     parent_mobile_number=models.CharField(max_length=20)
     address=models.CharField(max_length=200)
     studentClass=models.ForeignKey(Classes, on_delete=models.CASCADE, related_name='student', null=True, blank=True)
-
+    student_number = models.PositiveIntegerField(
+            null=True,
+            blank=True
+        )
     total_fee=models.DecimalField(max_digits=10, decimal_places=2, default=0)
     amount_paid=models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    def save(self, *args, **kwargs):
+        if not self.pk and self.studentClass and not self.student_number:
+            last_number = Students.objects.filter(
+                studentClass=self.studentClass
+            ).aggregate(
+                max_number=Max('student_number')
+            )['max_number']
+
+            self.student_number = (last_number or 0) + 1
+
+        super().save(*args, **kwargs)
 
     
     def __str__(self):
         return self.name
 
 class Marks(models.Model):
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name='marks',
+        null=True,
+        blank=True
+    )
     student=models.ForeignKey(Students,on_delete=models.CASCADE, related_name="marks")
     marks_obtained=models.IntegerField()
     total_marks=models.IntegerField()
@@ -97,6 +178,13 @@ class Marks(models.Model):
     
 
 class Events(models.Model):
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name='events',
+        null=True,
+        blank=True
+    )
     title=models.CharField(max_length=200, null=True,blank=True)
     discription=models.CharField(max_length=300, null=True,blank=True)
     image=models.ImageField(upload_to='event_images/', null=True,blank=True)
@@ -110,6 +198,13 @@ class Events(models.Model):
 
 
 class Attendance(models.Model):
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name='attendances',
+        null=True,
+        blank=True
+    )
     student=models.ForeignKey(Students,on_delete=models.CASCADE,related_name='attendances')
     class_fk=models.ForeignKey(Classes,on_delete=models.CASCADE,related_name='attendances')    
     date=models.DateField()
@@ -120,6 +215,13 @@ class Attendance(models.Model):
 
 
 class Staff(models.Model):
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name='staffs',
+        null=True,
+        blank=True
+    )
     name=models.CharField(max_length=100)
     phone_number=models.CharField(max_length=20)
     email=models.EmailField(max_length=50,blank=True, null=True)
@@ -130,6 +232,13 @@ class Staff(models.Model):
         return self.name
 
 class Expenses(models.Model):
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name='expenses',
+        null=True,
+        blank=True
+    )
     name=models.CharField(max_length=200)
     amount=models.DecimalField(max_digits=10, decimal_places=2)
     date=models.DateField(auto_now_add=True)
@@ -144,6 +253,13 @@ class ExpenseHistory(models.Model):
         ('updated','Updated'),
         ('deleted','Deleted')
     ]
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name='expense_histories',
+        null=True,
+        blank=True
+    )
     name=models.CharField(max_length=200)
     amount=models.DecimalField(max_digits=10, decimal_places=2)
     date_time=models.DateTimeField(default=timezone.now)
@@ -157,6 +273,13 @@ class ExpenseHistory(models.Model):
 
 
 class Assignment(models.Model):
+        tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name='assignments',
+        null=True,
+        blank=True
+    )
         class_assigned=models.ForeignKey(Classes,on_delete=models.CASCADE, related_name="assignments")
         title=models.CharField(max_length=255)
         discription=models.TextField()
@@ -175,6 +298,13 @@ class Submission(models.Model):
         ('late','Late'),
         ('not_submitted','Not Submitted')
     ]
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name='submissions',
+        null=True,
+        blank=True
+    )
     assignment=models.ForeignKey(Assignment,on_delete=models.CASCADE,related_name='submissions')
     student=models.ForeignKey(Students,models.CASCADE,related_name='submissions')
     status=models.CharField(max_length=20,choices=STATUS_CHOICES,default='pending')

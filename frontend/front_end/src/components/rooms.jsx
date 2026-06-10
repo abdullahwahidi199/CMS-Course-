@@ -1,22 +1,17 @@
 import { useEffect, useState } from "react";
+import instance from "../api/axiosInstance";
 
 export default function Rooms() {
   const [rooms, setRooms] = useState([]);
-  const savedTokens = localStorage.getItem("tokens");
   const [newRoom, setNewRoom] = useState({ name: "" });
   const [addRoomDisplay, setAddRoomDisplay] = useState(false);
 
   const fetchRooms = async () => {
-    const parsedTokens = JSON.parse(savedTokens);
-    const response = await fetch("http://127.0.0.1:8000/rooms/", {
-      headers: {
-        Authorization: `Bearer ${parsedTokens.access}`,
-      },
-    });
-    if (response.ok) {
-      const data = await response.json();
-      console.log(data);
-      setRooms(data);
+    try {
+      const response = await instance.get("/rooms/");
+      setRooms(response.data);
+    } catch (error) {
+      console.log(error.message);
     }
   };
 
@@ -27,18 +22,7 @@ export default function Rooms() {
   const addNewRoom = async (e) => {
     e.preventDefault();
     try {
-      const parsedTokens = JSON.parse(savedTokens);
-      const response = await fetch(`http://127.0.0.1:8000/rooms/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${parsedTokens.access}`,
-        },
-        body: JSON.stringify(newRoom),
-      });
-      if (!response.ok) {
-        throw new Error("could not add new room");
-      }
+      await instance.post("/rooms/", newRoom);
       setNewRoom({ name: "" });
       fetchRooms();
       setAddRoomDisplay(false);
@@ -49,16 +33,7 @@ export default function Rooms() {
 
   const handleDelete = async (id) => {
     try {
-      const parsedTokens = JSON.parse(savedTokens);
-      const response = await fetch(`http://127.0.0.1:8000/rooms/${id}/`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${parsedTokens.access}`,
-        },
-      });
-      if (!response.ok) {
-        throw new Error("Could not delete the room!");
-      }
+      await instance.delete(`/rooms/${id}/`);
       setRooms((prev) => prev.filter((room) => room.id !== id));
     } catch (error) {
       console.log(error);
@@ -78,7 +53,6 @@ export default function Rooms() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Rooms</h1>
         <button
@@ -89,7 +63,6 @@ export default function Rooms() {
         </button>
       </div>
 
-      {/* Add Room Form */}
       {addRoomDisplay && (
         <div className="mt-6 bg-white shadow-md rounded-2xl p-6 border border-gray-200 max-w-md">
           <h2 className="text-lg font-semibold mb-4">Add New Room</h2>
@@ -121,7 +94,6 @@ export default function Rooms() {
         </div>
       )}
 
-     
       <div>
         {rooms.map((room) => (
           <div

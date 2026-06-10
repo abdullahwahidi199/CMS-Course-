@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import instance from "../../api/axiosInstance";
 
 export default function Assignment() {
   const { id } = useParams();
@@ -17,22 +18,13 @@ export default function Assignment() {
     title: "",
     discription: "",
     due_date: "",
-    total_marks: ""
+    total_marks: "",
   });
 
-  const savedTokens = localStorage.getItem("tokens");
-
-  // Fetch assignment and its submissions
   const fetchAssignment = async () => {
     try {
-      const parsedTokens = JSON.parse(savedTokens);
-      const response = await fetch(`http://127.0.0.1:8000/assignments/${id}/`, {
-        headers: {
-          Authorization: `Bearer ${parsedTokens.access}`,
-        },
-      });
-      if (!response.ok) throw new Error("Could not get the assignment!");
-      const data = await response.json();
+      const response = await instance.get(`/assignments/${id}/`);
+      const data = response.data;
       setAssignment(data);
       setSubmissions(data.submissions);
       setClassId(data.class_assigned);
@@ -41,34 +33,28 @@ export default function Assignment() {
         title: data.title,
         discription: data.discription,
         due_date: data.due_date,
-        total_marks: data.total_marks
+        total_marks: data.total_marks,
       });
     } catch (error) {
       setError(error);
     }
   };
 
-  // Fetch students of the class
   useEffect(() => {
     if (!classId) return;
 
     const fetchClass = async () => {
-      const parsedTokens = JSON.parse(savedTokens);
-      const response = await fetch(`http://127.0.0.1:8000/classes/${classId}/`, {
-        headers: {
-          Authorization: `Bearer ${parsedTokens.access}`,
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setStudents(data.student);
+      try {
+        const response = await instance.get(`/classes/${classId}/`);
+        setStudents(response.data.student);
+      } catch (error) {
+        console.log(error.message);
       }
     };
 
     fetchClass();
   }, [classId]);
 
-  // Initialize local state with existing submissions
   useEffect(() => {
     const initial = {};
     submissions.forEach((s) => {
@@ -94,12 +80,14 @@ export default function Assignment() {
 
   const handleSaveAll = async () => {
     try {
-      const parsedTokens = JSON.parse(savedTokens);
-
       const payload = students.map((student) => {
         const existing = submissions.find((s) => s.student === student.id);
-        const key = existing?.id || student.id; // submission id if exists, else student id for new
-        const entry = local[key] || { marks_obtained: "", suggestion: "", status: "pending" };
+        const key = existing?.id || student.id;
+        const entry = local[key] || {
+          marks_obtained: "",
+          suggestion: "",
+          status: "pending",
+        };
 
         return {
           id: existing?.id || null,
@@ -111,44 +99,20 @@ export default function Assignment() {
         };
       });
 
-      const res = await fetch(
-        "http://127.0.0.1:8000/submissions/bulk_update/",
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${parsedTokens.access}`,
-          },
-          body: JSON.stringify(payload),
-        }
-      );
-
-      if (!res.ok) throw new Error("Failed to save submissions!");
-      await res.json();
+      await instance.patch("/submissions/bulk_update/", payload);
 
       alert("Submissions updated successfully!");
       fetchAssignment();
     } catch (err) {
       console.log(err);
       alert("Error updating submissions");
-
     }
   };
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     try {
-      const parsedTokens = JSON.parse(savedTokens);
-      const response = await fetch(`http://127.0.0.1:8000/assignments/${id}/`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": 'application/json',
-          Authorization: `Bearer ${parsedTokens.access}`,
-        },
-        body: JSON.stringify(editData)
-      });
-      if (!response.ok) throw new Error("Could not update the assignment!");
-      // alert("Assignment Edited!");
+      await instance.patch(`/assignments/${id}/`, editData);
       setEditingDisplay(false);
       fetchAssignment();
     } catch (error) {
@@ -158,101 +122,152 @@ export default function Assignment() {
   };
 
   const handleDelete = async () => {
-    const parsedTokens = JSON.parse(savedTokens);
-    const res = await fetch(`http://127.0.0.1:8000/assignments/${id}/`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${parsedTokens.access}` }
-    });
-    if (res.ok) {
-      fetchAssignment();
+    try {
+      await instance.delete(`/assignments/${id}/`);
       navigate(-1);
+    } catch (error) {
+      console.log(error.message);
     }
   };
+
   const today = new Date();
 
-  if (!assignment) return <div className="text-center text-gray-500 text-lg animate-pulse">Loading assignment...</div>;
+  if (!assignment)
+    return (
+      <div className="text-center text-gray-500 text-lg animate-pulse">
+        Loading assignment...
+      </div>
+    );
 
   return (
     <div className="max-w-6xl mx-auto p-8 font-sans">
       <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-2xl rounded-3xl p-8 mb-10">
-        <h2 className="text-4xl font-extrabold tracking-tight mb-3">{assignment.title}</h2>
-        <p className="text-lg opacity-90 mb-2">Due: <span className="font-semibold">{assignment.due_date}</span></p>
+        <h2 className="text-4xl font-extrabold tracking-tight mb-3">
+          {assignment.title}
+        </h2>
+        <p className="text-lg opacity-90 mb-2">
+          Due: <span className="font-semibold">{assignment.due_date}</span>
+        </p>
         <p className="opacity-95">{assignment.discription}</p>
         <div className="mt-5">
-          <button onClick={() => setEditingDisplay(true)} className="bg-yellow-500 text-white px-3 py-1 rounded mr-2">Edit</button>
+          <button
+            onClick={() => setEditingDisplay(true)}
+            className="bg-yellow-500 text-white px-3 py-1 rounded mr-2"
+          >
+            Edit
+          </button>
           <button
             className="bg-red-600 text-white px-3 py-1 rounded"
-            onClick={() => window.confirm("Are you sure you want to delete this assignment?") && handleDelete()}>
+            onClick={() =>
+              window.confirm(
+                "Are you sure you want to delete this assignment?",
+              ) && handleDelete()
+            }
+          >
             Delete
           </button>
         </div>
       </div>
 
-
       {editingDisplay && (
         <div className="fixed inset-0 bg-gray-300 bg-opacity-40 flex items-center justify-center z-50">
           <div className="bg-white w-full max-w-lg p-8 rounded-3xl shadow-2xl transform transition-all duration-300 scale-95 hover:scale-100">
-            <h3 className="text-2xl font-bold text-gray-800 mb-6">✏️ Edit Assignment</h3>
+            <h3 className="text-2xl font-bold text-gray-800 mb-6">
+              ✏️ Edit Assignment
+            </h3>
             <form onSubmit={handleEditSubmit} className="space-y-6">
               <div className="relative">
-                <label className="absolute -top-3 left-3 bg-white px-2 text-sm text-gray-500">Title</label>
+                <label className="absolute -top-3 left-3 bg-white px-2 text-sm text-gray-500">
+                  Title
+                </label>
                 <input
                   type="text"
                   value={editData.title}
-                  onChange={(e) => setEditData({ ...editData, title: e.target.value })}
+                  onChange={(e) =>
+                    setEditData({ ...editData, title: e.target.value })
+                  }
                   className="w-full border rounded-xl py-3 px-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
                 />
               </div>
               <div className="relative">
-                <label className="absolute -top-3 left-3 bg-white px-2 text-sm text-gray-500">Description</label>
+                <label className="absolute -top-3 left-3 bg-white px-2 text-sm text-gray-500">
+                  Description
+                </label>
                 <textarea
                   value={editData.discription}
-                  onChange={(e) => setEditData({ ...editData, discription: e.target.value })}
+                  onChange={(e) =>
+                    setEditData({ ...editData, discription: e.target.value })
+                  }
                   className="w-full border rounded-xl py-3 px-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
                   rows="3"
                 />
               </div>
               <div className="relative">
-                <label className="absolute -top-3 left-3 bg-white px-2 text-sm text-gray-500">Due Date</label>
+                <label className="absolute -top-3 left-3 bg-white px-2 text-sm text-gray-500">
+                  Due Date
+                </label>
                 <input
                   type="date"
                   value={editData.due_date}
-                  onChange={(e) => setEditData({ ...editData, due_date: e.target.value })}
+                  onChange={(e) =>
+                    setEditData({ ...editData, due_date: e.target.value })
+                  }
                   className="w-full border rounded-xl py-3 px-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
                 />
               </div>
               <div className="relative">
-                <label className="absolute -top-3 left-3 bg-white px-2 text-sm text-gray-500">Total Marks</label>
+                <label className="absolute -top-3 left-3 bg-white px-2 text-sm text-gray-500">
+                  Total Marks
+                </label>
                 <input
                   type="number"
                   value={editData.total_marks}
-                  onChange={(e) => setEditData({ ...editData, total_marks: e.target.value })}
+                  onChange={(e) =>
+                    setEditData({ ...editData, total_marks: e.target.value })
+                  }
                   className="w-full border rounded-xl py-3 px-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
                 />
               </div>
               <div className="flex justify-end space-x-4">
-                <button type="button" onClick={() => setEditingDisplay(false)} className="px-6 py-3 rounded-xl font-semibold border text-gray-600 hover:bg-gray-100 transition">Cancel</button>
-                <button type="submit" className="px-6 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-md">💾 Save Changes</button>
+                <button
+                  type="button"
+                  onClick={() => setEditingDisplay(false)}
+                  className="px-6 py-3 rounded-xl font-semibold border text-gray-600 hover:bg-gray-100 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-md"
+                >
+                  💾 Save Changes
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-
       <div>
-        <h3 className="text-3xl font-bold text-gray-800 mb-8">Student Submissions</h3>
+        <h3 className="text-3xl font-bold text-gray-800 mb-8">
+          Student Submissions
+        </h3>
         {new Date(assignment.due_date) < today && (
           <div className="mb-6 p-4 rounded-xl bg-red-100 border border-red-300 text-red-700 font-medium shadow-sm">
-            ⚠️ Submissions are locked. You cannot edit because the assignment due date has already passed.
+            ⚠️ Submissions are locked. You cannot edit because the assignment
+            due date has already passed.
           </div>
         )}
         <div className="grid md:grid-cols-2 gap-8">
           {students.map((student) => {
             const existing = submissions.find((s) => s.student === student.id);
             const key = existing?.id || student.id;
-            const subData = local[key] || { marks_obtained: "", suggestion: "", status: "pending" };
-            const dueDate = new Date(assignment.due_date)
+            const subData = local[key] || {
+              marks_obtained: "",
+              suggestion: "",
+              status: "pending",
+            };
+            const dueDate = new Date(assignment.due_date);
             return (
               <div
                 key={student.id}
@@ -268,7 +283,11 @@ export default function Assignment() {
                     type="number"
                     value={subData.marks_obtained}
                     onChange={(e) =>
-                      handleSubmissionChange(key, "marks_obtained", e.target.value)
+                      handleSubmissionChange(
+                        key,
+                        "marks_obtained",
+                        e.target.value,
+                      )
                     }
                     placeholder="Marks"
                     disabled={dueDate < today}
@@ -301,19 +320,17 @@ export default function Assignment() {
                 </div>
               </div>
             );
-
           })}
         </div>
         <div className="mt-10 text-center">
-         {new Date(assignment.due_date)>today && (
-           <button
-            onClick={handleSaveAll}
-            
-            className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-10 py-4 rounded-2xl font-bold shadow-lg transform transition duration-300 hover:-translate-y-1 hover:shadow-xl"
-          >
-            💾 Save All Changes
-          </button>
-         )}
+          {new Date(assignment.due_date) > today && (
+            <button
+              onClick={handleSaveAll}
+              className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-10 py-4 rounded-2xl font-bold shadow-lg transform transition duration-300 hover:-translate-y-1 hover:shadow-xl"
+            >
+              💾 Save All Changes
+            </button>
+          )}
         </div>
       </div>
     </div>

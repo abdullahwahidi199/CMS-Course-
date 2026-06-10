@@ -1,10 +1,13 @@
 from rest_framework import serializers
 from .models import Students,Teachers,Events,Classes,Attendance,Staff,Expenses,ExpenseHistory,RoomOfClass,User,Marks
-from .models import Assignment,Submission
+from .models import Assignment,Submission,Tenant
 
 
 
-
+class TenantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tenant
+        fields = "__all__"
 class AttendanceSerializer(serializers.ModelSerializer):
     class Meta:
         model=Attendance
@@ -65,7 +68,7 @@ class StudentsSerializer(serializers.ModelSerializer):
     studentClass_details=ClassesMiniSerialiser(source='studentClass',read_only=True)
     class Meta:
         model=Students
-        fields=['id','name','f_name','role_number','parent_mobile_number','address','studentClass','studentClass_details','total_fee','amount_paid','attendances','marks']
+        fields=['id','name','f_name','role_number','parent_mobile_number','student_number','address','studentClass','studentClass_details','total_fee','amount_paid','attendances','marks']
     
     def create(self,validated_data):
         user=User.objects.create_user(

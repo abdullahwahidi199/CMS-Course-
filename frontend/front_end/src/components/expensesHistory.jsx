@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import instance from "../api/axiosInstance";
 
 function ExpenseHistory() {
   const [history, setHistory] = useState([]);
@@ -9,16 +10,11 @@ function ExpenseHistory() {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const parsedTokens=JSON.parse(savedTokens)
-        const response = await fetch("http://127.0.0.1:8000/school/expenses/history/",{
-          headers:{
-            Authorization: `Bearer ${parsedTokens.access}`,
-          }
-        });
-        if (!response.ok) {
-          throw new Error("Failed to fetch expense history");
-        }
-        const data = await response.json();
+        
+        const response=await instance.get('/school/expenses/history/')
+        
+        const data = response.data
+        console.log(data)
         setHistory(data);
       } catch (err) {
         setError(err.message);
@@ -51,7 +47,7 @@ function ExpenseHistory() {
             {history.map((item, index) => (
               <tr key={index}>
                 <td className="border p-2">{item.name}</td>
-                <td className="border p-2">${item.amount}</td>
+                <td className="border p-2">{item.amount} AFN</td>
                 <td className="border p-2 capitalize">{item.action}</td>
                 <td className="border p-2">
                   {new Date(item.date_time).toLocaleString()}
