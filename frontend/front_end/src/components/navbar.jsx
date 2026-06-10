@@ -3,23 +3,36 @@ import { NavLink } from "react-router-dom";
 
 function Navbar() {
   const [username, setUsername] = useState(null);
+
   useEffect(() => {
-    const savedTokens = localStorage.getItem("tokens");
-    if (savedTokens) {
+    const fetchProfile = async () => {
+      const savedTokens = localStorage.getItem("tokens");
+
+      if (!savedTokens) return;
+
       const parsedTokens = JSON.parse(savedTokens);
-      fetch("http://127.0.0.1:8000/api/profile/", {
-        headers: {
-          Authorization: `Bearer ${parsedTokens.access}`,
-        },
-      })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          console.log(data);
-          if (data) setUsername(data.username);
-          else logout();
+
+      try {
+        const response = await instance.get("/profile/", {
+          headers: {
+            Authorization: `Bearer ${parsedTokens.access}`,
+          },
         });
-    }
+
+        setUsername(response.data.username);
+      } catch (error) {
+        console.log(error);
+
+        // optional: logout if unauthorized
+        if (error.response?.status === 401) {
+          logout();
+        }
+      }
+    };
+
+    fetchProfile();
   }, []);
+
   console.log(username);
   return (
     <div className="h-full flex flex-col justify-between">

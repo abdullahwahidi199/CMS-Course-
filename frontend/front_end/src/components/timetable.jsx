@@ -8,16 +8,20 @@ function Timetable() {
 
   const savedTokens = localStorage.getItem("tokens");
   useEffect(() => {
-    const parsedTokens = JSON.parse(savedTokens);
-    try {
-      setLoading(true);
-      const reponse = instance.get("/classes/");
-      setClasses(reponse.date);
-    } catch (error) {
-      setError(error.message);
-    } finally {
-      setLoading(false);
-    }
+    const fetchClasses = async () => {
+      try {
+        setLoading(true);
+
+        const response = await instance.get("/classes/");
+        setClasses(response.data); // ✅ NOT response.date
+      } catch (error) {
+        setError(error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchClasses();
   }, []);
 
   if (loading)
