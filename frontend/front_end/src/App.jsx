@@ -26,7 +26,6 @@ import AdminDashboard from "./components/adminDashboard";
 import TeacherDashboard from "./components/teacherDashboard/TeacherDashboard";
 
 import { AuthProvider } from "./AuthProvider";
-import { Home } from "lucide-react";
 import TeacherHomepage from "./components/teacherDashboard/homepage";
 import Marks from "./components/teacherDashboard/marks";
 import ClassDetails from "./components/teacherDashboard/class";
@@ -38,6 +37,14 @@ import About from "./components/about";
 import SuperAdminMain from "./components/SuperAdmin/SuperAdminMain";
 import SettingsMain from "./components/settings/SettingsMain";
 import SubscriptionExpired from "./components/SubscriptionExpired";
+import EnterpriseDashboard from "./components/enterprise/EnterpriseDashboard";
+import AssessmentsPage from "./components/enterprise/AssessmentsPage";
+import BillingPage from "./components/enterprise/BillingPage";
+import StationeryPage from "./components/enterprise/StationeryPage";
+import ReportsPage from "./components/enterprise/ReportsPage";
+import NotificationsPage from "./components/enterprise/NotificationsPage";
+import UserManagementPage from "./components/enterprise/UserManagementPage";
+import RoleManagementPage from "./components/enterprise/RoleManagementPage";
 
 function App() {
   const router = createBrowserRouter(
@@ -48,7 +55,7 @@ function App() {
         <Route
           path="super-admin/dashboard"
           element={
-            <ProtectedRoute roles={["super_admin"]}>
+            <ProtectedRoute roles={["super-admin", "super_admin"]}>
               <SuperAdminMain />
             </ProtectedRoute>
           }
@@ -56,25 +63,33 @@ function App() {
         <Route
           path="admin/dashboard"
           element={
-            <ProtectedRoute roles={["admin"]}>
+            <ProtectedRoute permission="dashboard.view">
               <AdminDashboard />
             </ProtectedRoute>
           }
         >
-          <Route index element={<HomePage />} />
-          <Route path="attendence" element={<Attendence />} />
-          <Route path="addmission" element={<Admission />} />
+          <Route index element={<EnterpriseDashboard />} />
+          <Route path="operations" element={<ProtectedRoute permission="dashboard.view"><EnterpriseDashboard /></ProtectedRoute>} />
+          <Route path="users" element={<ProtectedRoute permission="users.view"><UserManagementPage /></ProtectedRoute>} />
+          <Route path="roles" element={<ProtectedRoute permission="roles.view"><RoleManagementPage /></ProtectedRoute>} />
+          <Route path="assessments" element={<ProtectedRoute permission="assessments.view"><AssessmentsPage /></ProtectedRoute>} />
+          <Route path="billing" element={<ProtectedRoute permission="fees.view"><BillingPage /></ProtectedRoute>} />
+          <Route path="stationery" element={<ProtectedRoute permission="stationery.view"><StationeryPage /></ProtectedRoute>} />
+          <Route path="reports" element={<ProtectedRoute permission="reports.view"><ReportsPage /></ProtectedRoute>} />
+          <Route path="notifications" element={<ProtectedRoute permission="notifications.view"><NotificationsPage /></ProtectedRoute>} />
+          <Route path="attendence" element={<ProtectedRoute permission="attendance.view"><Attendence /></ProtectedRoute>} />
+          <Route path="addmission" element={<ProtectedRoute permission="students.create"><Admission /></ProtectedRoute>} />
           <Route path="student/:id" element={<IndividaulStudent />} />
-          <Route path="classes" element={<Classes />} />
+          <Route path="classes" element={<ProtectedRoute permission="classes.view"><Classes /></ProtectedRoute>} />
           <Route path="classes/:id" element={<IndividaulClass />} />
-          <Route path="teachers" element={<Teachers />} />
-          <Route path="staff" element={<Staff />} />
-          <Route path="settings" element={<SettingsMain />} />
-          <Route path="expenses" element={<Expenses />} />
+          <Route path="teachers" element={<ProtectedRoute permission="teachers.view"><Teachers /></ProtectedRoute>} />
+          <Route path="staff" element={<ProtectedRoute permission="staff.view"><Staff /></ProtectedRoute>} />
+          <Route path="settings" element={<ProtectedRoute permission="settings.view"><SettingsMain /></ProtectedRoute>} />
+          <Route path="expenses" element={<ProtectedRoute permission="fees.view"><Expenses /></ProtectedRoute>} />
           <Route path="expenses/history" element={<ExpenseHistory />} />
           <Route path="expenses/history/:id" element={<IndividualExpense />} />
-          <Route path="school/timetable" element={<Timetable />} />
-          <Route path="rooms" element={<Rooms />} />
+          <Route path="school/timetable" element={<ProtectedRoute permission="classes.view"><Timetable /></ProtectedRoute>} />
+          <Route path="rooms" element={<ProtectedRoute permission="classes.manage"><Rooms /></ProtectedRoute>} />
           <Route path="reciept" element={<Reciept />} />
           <Route path="about-me" element={<About />} />
         </Route>

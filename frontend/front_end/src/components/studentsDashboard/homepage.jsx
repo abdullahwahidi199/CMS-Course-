@@ -31,7 +31,7 @@ export default function Homepage() {
       const res = await instance.get("/student/profile/");
       const data = res.data;
       setStudent(data);
-      setClassID(data.studentClass_details.id);
+      setClassID(data.current_enrollments?.[0]?.batch || "");
     } catch (err) {
       console.error(err);
     }
@@ -62,6 +62,7 @@ export default function Homepage() {
   const today = new Date();
 
   if (!student) return <p className="text-center mt-10">Loading...</p>;
+  const currentEnrollment = student.current_enrollments?.[0];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -99,17 +100,14 @@ export default function Homepage() {
               <Book className="w-5 h-5 text-green-8 00" /> Class
             </h2>
             <p className="mt-4 font-medium text-gray-800">
-              {student.studentClass_details.name} - Room{" "}
-              {student.studentClass_details.roomOfClass_details.name}
+              {currentEnrollment?.batch_name || "No active batch"}
             </p>
             <p className="text-sm text-gray-500 mt-1">
-              {student.studentClass_details.startDate} →{" "}
-              {student.studentClass_details.endDate}
+              {currentEnrollment?.course_name || "No active course"}
             </p>
             <p className="text-sm text-gray-600 mt-2 flex items-center gap-2">
               <Clock className="w-4 h-4 text-blue-800" />
-              {student.studentClass_details.start_time} -{" "}
-              {student.studentClass_details.end_time}
+              Enrollment: {currentEnrollment?.enrollment_date || "-"}
             </p>
           </div>
 

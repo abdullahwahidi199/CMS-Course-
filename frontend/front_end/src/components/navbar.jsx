@@ -1,182 +1,48 @@
-import { useState, useEffect } from "react";
-import { NavLink } from "react-router-dom";
-import instance from "../api/axiosInstance";
+import { useContext } from "react";
+import { NavLink, useNavigate } from "react-router-dom";
+import { AuthContext } from "../AuthProvider";
 
 function Navbar() {
-  const [username, setUsername] = useState(null);
+  const { user, menus, logout } = useContext(AuthContext);
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      const savedTokens = localStorage.getItem("tokens");
+  const handleLogout = async () => {
+    await logout();
+    navigate("/", { replace: true });
+  };
 
-      if (!savedTokens) return;
-
-      const parsedTokens = JSON.parse(savedTokens);
-
-      try {
-        const response = await instance.get("/profile/", {
-          headers: {
-            Authorization: `Bearer ${parsedTokens.access}`,
-          },
-        });
-
-        setUsername(response.data.username);
-      } catch (error) {
-        console.log(error);
-
-        // optional: logout if unauthorized
-        if (error.response?.status === 401) {
-          logout();
-        }
-      }
-    };
-
-    fetchProfile();
-  }, []);
-
-  console.log(username);
   return (
-    <div className="h-full flex flex-col justify-between">
-      <div className="">
-        <div className="text-2xl font-bold text-white mb-8">
-          Admin, {username}
+    <div className="flex h-full flex-col justify-between overflow-auto">
+      <div>
+        <div className="mb-8">
+          <div className="text-lg font-bold text-white">{user?.tenant?.name || "School ERP"}</div>
+          <div className="mt-1 text-sm text-gray-300">{user?.first_name || user?.username}</div>
+          <div className="text-xs text-gray-400">{user?.role_details?.name || user?.role_slug}</div>
         </div>
 
-        <ul className="space-y-2">
-          <li>
-            <NavLink
-              to="/admin/dashboard"
-              end
-              className={({ isActive }) =>
-                `block px-4 py-[5px] rounded hover:bg-gray-700 transition ${
-                  isActive ? `bg-gray-700 text-white` : `text-gray-300`
-                }`
-              }
-            >
-              Home
-            </NavLink>
-          </li>
-
-          <li>
-            <NavLink
-              to="addmission"
-              className={({ isActive }) =>
-                `block px-4 py-[5px] rounded hover:bg-gray-700 transition ${isActive ? `bg-gray-700 text-white` : `text-gray-300`}`
-              }
-            >
-              Addmission
-            </NavLink>
-          </li>
-
-          <li className="text-gray-300 px-4 py-2 hover:bg-gray-700 rounded cursor-pointer">
-            Carriculam
-          </li>
-
-          <li>
-            <NavLink
-              to="classes"
-              className={({ isActive }) =>
-                `block px-4 py-[5px] rounded hover:bg-gray-700 transition ${
-                  isActive ? "bg-gray-700 text-white" : "text-gray-300"
-                }`
-              }
-              id="nav_item"
-            >
-              Classes
-            </NavLink>
-          </li>
-
-          <li>
-            <NavLink
-              to="attendence"
-              className={({ isActive }) =>
-                `block px-4 py-[5px] rounded hover:bg-gray-700 transition ${
-                  isActive ? "bg-gray-700 text-white" : "text-gray-300"
-                }`
-              }
-              id="nav_item"
-            >
-              Attendence
-            </NavLink>
-          </li>
-          <li>
-            <NavLink
-              to="teachers"
-              className={({ isActive }) =>
-                `block px-4 py-[5px] rounded hover:bg-gray-700 transition ${
-                  isActive ? "bg-gray-700 text-white" : "text-gray-300"
-                }`
-              }
-              id="nav_item"
-            >
-              Teachers
-            </NavLink>
-          </li>
-          <li>
-            <NavLink
-              to="staff"
-              className={({ isActive }) =>
-                `block px-4 py-[5px] rounded hover:bg-gray-700 transition ${isActive ? "bg-gray-700 text-white" : "text-gray-300"}`
-              }
-            >
-              Staff
-            </NavLink>
-          </li>
-          <li>
-            <NavLink
-              to="settings"
-              className={({ isActive }) =>
-                `block px-4 py-[5px] rounded hover:bg-gray-700 transition ${isActive ? "bg-gray-700 text-white" : "text-gray-300"}`
-              }
-            >
-              Settings
-            </NavLink>
-          </li>
-
-          <li>
-            <NavLink
-              to="expenses"
-              className={({ isActive }) =>
-                `block px-4 py-[5px] rounded hover:bg-gray-700 transition ${isActive ? "bg-gray-700 text-white" : "text-gray-300"}`
-              }
-            >
-              Expenses
-            </NavLink>
-          </li>
-          <li>
-            <NavLink
-              to="school/timetable"
-              className={({ isActive }) =>
-                `block px-4 py-[5px] rounded hover:bg-gray-700 transitionn ${isActive ? "bg-gray-700 text-white}" : "text-gray-300"}`
-              }
-            >
-              Timetable
-            </NavLink>
-          </li>
-          <li>
-            <NavLink
-              to="rooms"
-              className={({ isActive }) =>
-                `block px-4 py-[5px] rounded hover:bg-gray-700 transitionn ${isActive ? "bg-gray-700 text-white}" : "text-gray-300"}`
-              }
-            >
-              Rooms
-            </NavLink>
-          </li>
-          <li>
-            <NavLink
-              to="about-me"
-              className={({ isActive }) =>
-                `block px-4 py-[5px] rounded hover:bg-gray-700 transitionn ${isActive ? "bg-gray-700 text-white}" : "text-gray-300"}`
-              }
-            >
-              About
-            </NavLink>
-          </li>
+        <ul className="space-y-1">
+          {menus.map((item) => (
+            <li key={`${item.path}-${item.permission}`}>
+              <NavLink
+                to={item.path}
+                end={item.path === "/admin/dashboard"}
+                className={({ isActive }) =>
+                  `block rounded px-4 py-2 text-sm transition hover:bg-gray-700 ${
+                    isActive ? "bg-gray-700 text-white" : "text-gray-300"
+                  }`
+                }
+              >
+                {item.label}
+              </NavLink>
+            </li>
+          ))}
         </ul>
       </div>
-      <h2 className="text-gray-400 px-4 py-4 cursor-pointer">Info</h2>
+      <button className="rounded px-4 py-2 text-left text-sm text-gray-300 hover:bg-gray-700" onClick={handleLogout}>
+        Logout
+      </button>
     </div>
   );
 }
+
 export default Navbar;

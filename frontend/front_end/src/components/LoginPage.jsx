@@ -8,6 +8,7 @@ export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState(null);
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -16,32 +17,32 @@ export default function LoginPage() {
     e.preventDefault();
 
     try {
-      // Get tokens
       const tokenRes = await instance.post("/token/", {
         username,
         password,
       });
       const tokens = tokenRes.data;
 
-      // Save tokens FIRST so the interceptor can use them for the profile call
-      localStorage.setItem("tokens", JSON.stringify(tokens));
-
-      // Fetch profile
-      const profileRes = await instance.get("/profile/");
-      const profile = profileRes.data;
-      console.log(profile);
-
-      login(tokens, profile);
-
-      if (profile.role === "super_admin") {
-        navigate("/super-admin/dashboard");
+      const profile = await login(tokens, remember);
+      if (!profile) {
+        setError("Could not restore your session.");
         return;
-      } else if (profile.role === "admin") {
+      }
+
+      const roleSlug = profile.role_slug || profile.role_details?.slug;
+      const modules = profile.allowed_modules || [];
+      if (roleSlug === "super-admin" || roleSlug === "super_admin" || roleSlug === "admin") {
         navigate("/admin/dashboard");
-      } else if (profile.role === "teacher") {
+      } else if (roleSlug === "teacher") {
         navigate("/teacher/dashboard");
-      } else {
+      } else if (roleSlug === "student") {
         navigate("/student/dashboard");
+      } else if (modules.includes("fees")) {
+        navigate("/admin/dashboard/billing");
+      } else if (modules.includes("stationery") || modules.includes("inventory")) {
+        navigate("/admin/dashboard/stationery");
+      } else {
+        navigate("/admin/dashboard");
       }
     } catch (err) {
       console.error("Login error:", err);
@@ -118,6 +119,14 @@ export default function LoginPage() {
             {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
           </button>
         </div>
+        <label className="mb-5 flex items-center gap-2 text-sm text-gray-600">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(event) => setRemember(event.target.checked)}
+          />
+          Remember me
+        </label>
 
         <button
           type="submit"

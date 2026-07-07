@@ -1,6 +1,9 @@
 from rest_framework import serializers
 from .models import Students,Teachers,Events,Classes,Attendance,Staff,Expenses,ExpenseHistory,RoomOfClass,User,Marks
+from .models import Course, Enrollment, Role
 from .models import Assignment,Submission,Tenant
+from .services.student_service import create_student, update_student
+from .services.teacher_service import create_teacher, update_teacher
 
 
 
@@ -58,40 +61,132 @@ class ClassesMiniSerialiser(serializers.ModelSerializer):
 
     class Meta:
         model=Classes
-        fields=['id','name','startDate','endDate','roomOfClass','start_time','end_time','roomOfClass_details']
+        fields=['id','name','course','course_name','startDate','endDate','roomOfClass','start_time','end_time','roomOfClass_details']
+
+
+class EnrollmentSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source="student.name", read_only=True)
+    course_name = serializers.CharField(source="course.name", read_only=True)
+    batch_name = serializers.CharField(source="batch.name", read_only=True)
+
+    class Meta:
+        model = Enrollment
+        fields = "__all__"
+        read_only_fields = ["tenant", "created_by", "created_at", "updated_at"]
 
 
 
 class StudentsSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source="user.username", required=False)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    first_name = serializers.CharField(source="user.first_name", required=False)
+    last_name = serializers.CharField(source="user.last_name", required=False)
+    email = serializers.EmailField(source="user.email", required=False, allow_blank=True)
+    phone = serializers.CharField(source="user.phone", required=False, allow_blank=True)
+    user_is_active = serializers.BooleanField(source="user.is_active", read_only=True)
     attendances=AttendanceSerializer(many=True,read_only=True)
     marks=MarksSerializer(many=True,read_only=True)
-    studentClass_details=ClassesMiniSerialiser(source='studentClass',read_only=True)
+    current_enrollments=serializers.SerializerMethodField()
+    previous_enrollments=serializers.SerializerMethodField()
     class Meta:
         model=Students
-        fields=['id','name','f_name','role_number','parent_mobile_number','student_number','address','studentClass','studentClass_details','total_fee','amount_paid','attendances','marks']
+        fields=[
+            'id','username','password','first_name','last_name','email','phone','user_is_active',
+            'name','f_name','role_number','parent_mobile_number','student_number','address',
+            'total_fee','amount_paid','enrollment_date','is_active','is_archived',
+            'current_enrollments','previous_enrollments','attendances','marks'
+        ]
+        read_only_fields = ["name", "student_number", "enrollment_date", "is_archived"]
+
+    def get_current_enrollments(self, obj):
+        return EnrollmentSerializer(obj.enrollments.filter(status=Enrollment.Status.ACTIVE), many=True).data
+
+    def get_previous_enrollments(self, obj):
+        return EnrollmentSerializer(obj.enrollments.exclude(status=Enrollment.Status.ACTIVE), many=True).data
     
-    def create(self,validated_data):
-        user=User.objects.create_user(
-            username=validated_data['name'],
-            password=validated_data['name']+'000',
-            role='student'
+    def validate(self, attrs):
+        user_data = attrs.get("user", {})
+        if self.instance is None and not attrs.get("password"):
+            raise serializers.ValidationError({"password": "Password is required when creating a student."})
+        if self.instance is None:
+            for field in ["username", "first_name", "last_name"]:
+                if not user_data.get(field):
+                    raise serializers.ValidationError({field: f"{field.replace('_', ' ').title()} is required."})
+        return attrs
+
+    def create(self, validated_data):
+        user_data = validated_data.pop("user", {})
+        password = validated_data.pop("password")
+        return create_student(
+            tenant=validated_data.pop("tenant"),
+            username=user_data.get("username"),
+            password=password,
+            first_name=user_data.get("first_name"),
+            last_name=user_data.get("last_name"),
+            email=user_data.get("email", ""),
+            phone=user_data.get("phone", ""),
+            **validated_data,
         )
-        student=Students.objects.create(user=user,**validated_data)
-        return student
+
+    def update(self, instance, validated_data):
+        user_data = validated_data.pop("user", {})
+        password = validated_data.pop("password", None)
+        return update_student(
+            instance,
+            username=user_data.get("username"),
+            password=password,
+            first_name=user_data.get("first_name"),
+            last_name=user_data.get("last_name"),
+            email=user_data.get("email"),
+            phone=user_data.get("phone"),
+            **validated_data,
+        )
 
 class TeachersSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source="user.username", required=False)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    user_is_active = serializers.BooleanField(source="user.is_active", read_only=True)
     classes=ClassesMiniSerialiser(many=True,read_only=True)
     class Meta:
         model=Teachers
-        fields=['id','full_name','email_address','subject','phone_number','department','classes']
-    def create(self,validated_data):
-        user=User.objects.create_user(
-            username=validated_data['full_name'],
-            password=validated_data['full_name']+'123',
-            role='teacher'
+        fields=['id','username','password','user_is_active','full_name','email_address','subject','phone_number','department','classes','is_active','is_archived']
+        read_only_fields = ["is_archived"]
+
+    def validate(self, attrs):
+        user_data = attrs.get("user", {})
+        if self.instance is None and not attrs.get("password"):
+            raise serializers.ValidationError({"password": "Password is required when creating a teacher."})
+        if self.instance is None and not user_data.get("username"):
+            raise serializers.ValidationError({"username": "Username is required."})
+        if self.instance is None and not attrs.get("email_address"):
+            raise serializers.ValidationError({"email_address": "Email is required."})
+        return attrs
+
+    def create(self, validated_data):
+        user_data = validated_data.pop("user", {})
+        password = validated_data.pop("password")
+        return create_teacher(
+            tenant=validated_data.pop("tenant"),
+            username=user_data.get("username"),
+            password=password,
+            email=validated_data.get("email_address"),
+            **validated_data,
         )
-        teacher=Teachers.objects.create(user=user,**validated_data)
-        return teacher
+
+    def update(self, instance, validated_data):
+        user_data = validated_data.pop("user", {})
+        password = validated_data.pop("password", None)
+        return update_teacher(
+            instance,
+            username=user_data.get("username"),
+            password=password,
+            email=validated_data.get("email_address"),
+            full_name=validated_data.get("full_name"),
+            phone_number=validated_data.get("phone_number"),
+            subject=validated_data.get("subject"),
+            department=validated_data.get("department"),
+            is_active=validated_data.get("is_active"),
+        )
 
 class EventSerializer(serializers.ModelSerializer):
     class Meta:
@@ -104,29 +199,10 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'role', 'teacher_profile', 'student_profile']
-    #     extra_kwargs = {
-    #         'password': {'write_only': True}
-    #     }
-    
-    # def create(self,validated_data):
-    #     role=validated_data.get('role')
-    #     password=validated_data.pop('password',None)
-
-    #     user=User(**validated_data)
-
-    #     if password:
-    #         user.set_password(password)
-    #     user.save()
-
-    #     if role=='teacher':
-    #         Teachers.objects.create(user=user,full_name=user.username,email_address=user.email,)
-    #     elif role=='student':
-    #         Students.objects.create(user=user,name=user.username)
-    #     return user
+        fields = ['id', 'username', 'role', 'role_slug', 'teacher_profile', 'student_profile']
 
 class ClassesSerializer(serializers.ModelSerializer):
-    student=StudentsSerializer(many=True, read_only=True)
+    enrollments=EnrollmentSerializer(many=True, read_only=True)
     roomOfClass = serializers.PrimaryKeyRelatedField(
         queryset=RoomOfClass.objects.all(), required=False, allow_null=True
     )
@@ -144,16 +220,25 @@ class ClassesSerializer(serializers.ModelSerializer):
     
     class Meta:
         model=Classes
-        fields=['id','name','subjects','teachers','teachers_details','startDate','endDate','student','student_count','teachers_count',
-                'total_earnings','roomOfClass','start_time','end_time','assignments','roomOfClass_details']
+        fields=['id','name','course','course_name','subjects','teachers','teachers_details','startDate','endDate','enrollments','student_count','teachers_count',
+                'total_earnings','roomOfClass','start_time','end_time','assignments','roomOfClass_details','is_active','is_archived']
 
     def get_total_earnings(self, obj):
         return obj.total_earnings()
     
         
-    
+    def get_teachers_count(self, obj):
+        return obj.teachers.count()
     def get_student_count(self, obj):
-        return len(obj.student.all())
+        return obj.enrollments.filter(status=Enrollment.Status.ACTIVE).count()
+
+
+class CourseSerializer(serializers.ModelSerializer):
+    batches = ClassesMiniSerialiser(many=True, read_only=True)
+
+    class Meta:
+        model = Course
+        fields = "__all__"
 
     def get_teachers_count(self, obj):
         return len(obj.teachers.all())

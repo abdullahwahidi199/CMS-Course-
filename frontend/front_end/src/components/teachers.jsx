@@ -6,6 +6,8 @@ function Teachers() {
   const [teachers, setTeachers] = useState([]);
   const [addTeacherDisplay, setAddTeacherDisply] = useState(false);
   const [newTeacher, setNewTeacher] = useState({
+    username: "",
+    password: "",
     full_name: "",
     phone_number: "",
     email_address: "",
@@ -52,6 +54,7 @@ function Teachers() {
   const updateTeacher = async (e) => {
     e.preventDefault();
     const payload = {
+      username: selectedTeacherInfo.username,
       full_name: selectedTeacherInfo.full_name,
       phone_number: selectedTeacherInfo.phone_number,
       email_address: selectedTeacherInfo.email_address,
@@ -110,6 +113,12 @@ function Teachers() {
               <strong>Email:</strong> {teacher.email_address}
             </p>
             <p className="text-gray-700 mb-1">
+              <strong>Username:</strong> {teacher.username}
+            </p>
+            <p className="text-gray-700 mb-1">
+              <strong>Status:</strong> {teacher.user_is_active && teacher.is_active ? "Active" : "Inactive"}
+            </p>
+            <p className="text-gray-700 mb-1">
               <strong>Phone:</strong> {teacher.phone_number}
             </p>
             <p className="text-gray-700 mb-1">
@@ -151,6 +160,14 @@ function Teachers() {
             <h2 className="text-xl font-bold mg-4">Edit Teacher</h2>
             <form onSubmit={updateTeacher} className="space-y-4 mt-[20px]">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <input
+                  required
+                  type="text"
+                  name="username"
+                  className="w-full p-2 border rounded"
+                  value={selectedTeacherInfo?.username || ""}
+                  onChange={handleEditTeacherInfoChange}
+                />
                 <input
                   required
                   type="text"
@@ -237,6 +254,28 @@ function Teachers() {
         <div className="formDisplay mt-6 p-4 bg-gray-100 rounded-xl shadow-md">
           <form onSubmit={postTeacher} className="grid gap-4">
             <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block mb-1">Username:</label>
+                <input
+                  required
+                  type="text"
+                  name="username"
+                  className="w-full p-2 border rounded"
+                  value={newTeacher.username}
+                  onChange={handleTeacherInfo}
+                />
+              </div>
+              <div>
+                <label className="block mb-1">Password:</label>
+                <input
+                  required
+                  type="password"
+                  name="password"
+                  className="w-full p-2 border rounded"
+                  value={newTeacher.password}
+                  onChange={handleTeacherInfo}
+                />
+              </div>
               <div>
                 <label className="block mb-1">Full Name:</label>
                 <input

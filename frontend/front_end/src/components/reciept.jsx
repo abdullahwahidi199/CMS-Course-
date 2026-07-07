@@ -1,8 +1,9 @@
 import React, { forwardRef } from "react";
 
 const Bill = forwardRef(({ student, tenant }, ref) => {
-  baseURL: import.meta.env.VITE_API_URL;
+  const baseURL = import.meta.env.VITE_API_URL;
   if (!student) return null;
+  const currentEnrollment = student.current_enrollments?.[0];
 
   return (
     <div
@@ -13,7 +14,7 @@ const Bill = forwardRef(({ student, tenant }, ref) => {
       <div className="text-center border-b border-gray-400 pb-4 mb-4">
         {tenant?.logo && (
           <img
-            src={`${baseURL}${settings.logo}`}
+            src={`${baseURL}${tenant.logo}`}
             alt={tenant.name}
             className="w-20 h-20 object-contain mx-auto mb-3"
           />
@@ -39,7 +40,7 @@ const Bill = forwardRef(({ student, tenant }, ref) => {
         </p>
         <p>
           <span className="font-semibold">Class:</span>{" "}
-          {student.studentClass_details.name}
+          {currentEnrollment?.batch_name || "No active batch"}
         </p>
         <p>
           <span className="font-semibold">Parent Mobile:</span>{" "}

@@ -237,12 +237,12 @@ function Classes() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-gray-50 rounded p-4 flex items-center justify-between">
                 <PieChartComponent
-                  data={{ students_count: classItem.student.length }}
+                  data={{ students_count: classItem.student_count }}
                 />
               </div>
               <div className="bg-gray-50 rounded p-4 flex items-center justify-between">
                 <PieChartComponent2
-                  data={{ teachers_count: classItem.teachers.length }}
+                  data={{ teachers_count: classItem.teachers_count }}
                 />
               </div>
 
@@ -330,7 +330,7 @@ function Classes() {
                       <th className="px-4 py-2">Profile & attendance</th>
                     </tr>
                   </thead>
-                  {classItem.student.map((student) => (
+                  {/* {classItem.student.map((student) => (
                     <tbody key={student.id}>
                       <tr className="border-t">
                         <td className="px-4 py-2">{student.role_number}</td>
@@ -352,7 +352,7 @@ function Classes() {
                         </td>
                       </tr>
                     </tbody>
-                  ))}
+                  ))} */}
                 </table>
               </div>
 

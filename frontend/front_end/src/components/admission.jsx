@@ -1,218 +1,361 @@
-import { useEffect, useState } from "react";
-import { Pencil, Trash2, Save, XCircle, Receipt } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import Bill from "./reciept";
-import { useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Archive, RotateCcw, Save, UserPlus } from "lucide-react";
+import DataTable from "./shared/DataTable";
+import PageHeader from "./shared/PageHeader";
 import instance from "../api/axiosInstance";
 
-function Admission() {
-  const [classes, setClasses] = useState([]);
-  const [newStudent, setNewStudent] = useState({
-    name: "",
-    f_name: "",
-    role_number: "",
-    parent_mobile_number: "",
-    address: "",
-    total_fee: "",
-    amount_paid: "",
-  });
-  const [selectedClassId, setSelectedClassId] = useState(null);
-  const [showReceipt, setShowReceipt] = useState(false);
-  const [savedStudent, setSavedStudent] = useState(null);
-  const [error, setError] = useState(null);
-  const [tenant, setTenant] = useState();
-  const receiptRef = useRef();
-  const navigate = useNavigate();
-  const savedTokens = localStorage.getItem("tokens");
+const emptyStudent = {
+  username: "",
+  password: "",
+  first_name: "",
+  last_name: "",
+  email: "",
+  phone: "",
+  f_name: "",
+  parent_mobile_number: "",
+  address: "",
+  batch: "",
+};
 
-  const getTenant = async () => {
+function inputClass() {
+  return "w-full rounded-md border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cyan-600";
+}
+
+function Field({ label, children }) {
+  return (
+    <label className="block text-sm">
+      <span className="mb-1 block font-medium text-gray-700">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+export default function Admission() {
+  const [students, setStudents] = useState([]);
+  const [batches, setBatches] = useState([]);
+  const [form, setForm] = useState(emptyStudent);
+  const [editingId, setEditingId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  const fetchData = async () => {
+    setLoading(true);
     try {
-      const response = await instance.get("/get-tenant/");
-      setTenant(response.data);
-    } catch (error) {
-      setError(error.message);
-    }
-  };
-
-  const add_student = async (e) => {
-    e.preventDefault();
-
-    const studentData = {
-      ...newStudent,
-      studentClass: Number(selectedClassId),
-    };
-    const response = await instance.post("/students/", studentData);
-
-    const savedData = response.data;
-    setSavedStudent(savedData);
-    console.log(savedData);
-    setShowReceipt(true);
-
-    setNewStudent({
-      name: "",
-      f_name: "",
-      role_number: "",
-      parent_mobile_number: "",
-      address: "",
-      total_fee: "",
-      amount_paid: "",
-    });
-  };
-  const fetchClasses = async () => {
-    try {
-      const response = await instance.get("/classes/");
-
-      const data = response.data;
-      setClasses(data);
-    } catch (error) {
-      console.error(error.message);
+      const [studentsResponse, batchesResponse] = await Promise.all([
+        instance.get("/students/"),
+        instance.get("/classes/"),
+      ]);
+      setStudents(studentsResponse.data);
+      setBatches(batchesResponse.data);
+    } catch (err) {
+      setError(
+        err.response?.data?.detail || err.message || "Could not load students.",
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    getTenant();
-    fetchClasses();
+    fetchData();
   }, []);
 
-  const handleStudentInfo = (e) => {
-    setNewStudent((prev) => ({
-      ...prev,
-      [e.target.name]: e.target.value,
-    }));
+  const validate = () => {
+    if (!form.username.trim()) return "Username is required.";
+    if (!editingId && !form.password) return "Password is required.";
+    if (!form.first_name.trim() || !form.last_name.trim())
+      return "First name and last name are required.";
+    return "";
   };
 
+  const saveStudent = async (event) => {
+    event.preventDefault();
+    const validation = validate();
+    if (validation) {
+      setError(validation);
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = { ...form };
+      const batchId = payload.batch;
+      delete payload.batch;
+      if (editingId && !payload.password) delete payload.password;
+
+      let saved;
+      if (editingId) {
+        const response = await instance.patch(
+          `/students/${editingId}/`,
+          payload,
+        );
+        saved = response.data;
+        setMessage("Student updated.");
+      } else {
+        const response = await instance.post("/students/", payload);
+        saved = response.data;
+        setMessage("Student account created.");
+      }
+
+      const batch = batches.find((item) => Number(item.id) === Number(batchId));
+      if (!editingId && batch) {
+        await instance.post("/enrollments/", {
+          student: saved.id,
+          batch: batch.id,
+          course: batch.course,
+          enrollment_date: new Date().toISOString().slice(0, 10),
+          status: "active",
+        });
+      }
+
+      setForm(emptyStudent);
+      setEditingId(null);
+      setError("");
+      await fetchData();
+    } catch (err) {
+      setError(
+        err.response?.data
+          ? JSON.stringify(err.response.data)
+          : "Could not save student.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const editStudent = (student) => {
+    const [fallbackFirst, ...rest] = (student.name || "").split(" ");
+    setEditingId(student.id);
+    setForm({
+      ...emptyStudent,
+      username: student.username || "",
+      first_name: student.first_name || fallbackFirst || "",
+      last_name: student.last_name || rest.join(" "),
+      email: student.email || "",
+      phone: student.phone || "",
+      f_name: student.f_name || "",
+      role_number: student.role_number || "",
+      parent_mobile_number: student.parent_mobile_number || "",
+      address: student.address || "",
+      total_fee: student.total_fee || "0",
+      amount_paid: student.amount_paid || "0",
+    });
+  };
+
+  const lifecycle = async (student, action) => {
+    await instance.post(`/students/${student.id}/${action}/`);
+    setMessage(`Student ${action} complete.`);
+    await fetchData();
+  };
+
+  const columns = useMemo(
+    () => [
+      { key: "username", label: "Username" },
+      { key: "name", label: "Name" },
+      { key: "email", label: "Email" },
+      { key: "phone", label: "Phone" },
+      { key: "role_number", label: "Roll No" },
+      {
+        key: "batch",
+        label: "Current Batch",
+        render: (row) => row.current_enrollments?.[0]?.batch_name || "-",
+      },
+      {
+        key: "is_active",
+        label: "Status",
+        render: (row) => (row.is_active ? "Active" : "Inactive"),
+      },
+    ],
+    [],
+  );
+
   return (
-    <div className="flex justify-center items-center mt-[20px]">
-      {showReceipt && savedStudent ? (
-        <div className="w-full max-w-2xl">
-          <Bill student={savedStudent} ref={receiptRef} tenant={tenant} />
-
-          <div className="flex justify-center mt-6 print:hidden">
-            <button
-              onClick={() => window.print()}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              Print Receipt
-            </button>
-            <button
-              onClick={() => setShowReceipt(false)}
-              className="px-6 py-2 bg-gray-500 text-white rounded-lg ml-2 hover:bg-gray-600"
-            >
-              Close
-            </button>
-          </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Student Management"
+        description="Create student login accounts, manage profiles, enrollments, and lifecycle status."
+      />
+      {message ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+          {message}
         </div>
-      ) : (
-        <div className="bg-white rounded w-full max-w-xl p-6 shadow-lg">
-          <h2 className="text-xl font-bold mg-6 font-mono">Addmission Form</h2>
-          <form onSubmit={(e) => add_student(e)} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-[25px]">
-              <input
-                type="text"
-                placeholder="Full name"
-                className="border border-gray-300 p-2 rounded"
-                name="name"
-                value={newStudent.name}
-                onChange={handleStudentInfo}
-                required
-              />
+      ) : null}
+      {error ? (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      ) : null}
 
-              <input
-                type="text"
-                placeholder="Father's name"
-                className="border border-gray-300 p-2 rounded"
-                name="f_name"
-                value={newStudent.f_name}
-                onChange={handleStudentInfo}
-                required
-              />
-
+      <form
+        className="rounded-md bg-white p-4 shadow-sm"
+        onSubmit={saveStudent}
+      >
+        <div className="mb-4 flex items-center gap-2 font-semibold text-gray-900">
+          <UserPlus size={18} />{" "}
+          {editingId ? "Edit Student" : "Create Student Account"}
+        </div>
+        <div className="grid gap-4 md:grid-cols-4">
+          <Field label="Username">
+            <input
+              className={inputClass()}
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
+              required
+            />
+          </Field>
+          <Field label="Password">
+            <input
+              className={inputClass()}
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              required={!editingId}
+            />
+          </Field>
+          <Field label="First Name">
+            <input
+              className={inputClass()}
+              value={form.first_name}
+              onChange={(e) => setForm({ ...form, first_name: e.target.value })}
+              required
+            />
+          </Field>
+          <Field label="Last Name">
+            <input
+              className={inputClass()}
+              value={form.last_name}
+              onChange={(e) => setForm({ ...form, last_name: e.target.value })}
+              required
+            />
+          </Field>
+          <Field label="Email">
+            <input
+              className={inputClass()}
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
+          </Field>
+          <Field label="Phone">
+            <input
+              className={inputClass()}
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            />
+          </Field>
+          <Field label="Father/Guardian Name">
+            <input
+              className={inputClass()}
+              value={form.f_name}
+              onChange={(e) => setForm({ ...form, f_name: e.target.value })}
+            />
+          </Field>
+          <Field label="Roll Number">
+            <input
+              className={inputClass()}
+              value={form.role_number}
+              onChange={(e) =>
+                setForm({ ...form, role_number: e.target.value })
+              }
+            />
+          </Field>
+          <Field label="Parent Mobile">
+            <input
+              className={inputClass()}
+              value={form.parent_mobile_number}
+              onChange={(e) =>
+                setForm({ ...form, parent_mobile_number: e.target.value })
+              }
+            />
+          </Field>
+          <Field label="Address">
+            <input
+              className={inputClass()}
+              value={form.address}
+              onChange={(e) => setForm({ ...form, address: e.target.value })}
+            />
+          </Field>
+          <Field label="Total Fee">
+            <input
+              className={inputClass()}
+              type="number"
+              value={form.total_fee}
+              onChange={(e) => setForm({ ...form, total_fee: e.target.value })}
+            />
+          </Field>
+          <Field label="Amount Paid">
+            <input
+              className={inputClass()}
+              type="number"
+              value={form.amount_paid}
+              onChange={(e) =>
+                setForm({ ...form, amount_paid: e.target.value })
+              }
+            />
+          </Field>
+          {!editingId ? (
+            <Field label="Initial Batch">
               <select
-                value={selectedClassId}
-                required
-                onChange={(e) => setSelectedClassId(e.target.value)}
-                className="border border-gray-300 p-2 rounded"
+                className={inputClass()}
+                value={form.batch}
+                onChange={(e) => setForm({ ...form, batch: e.target.value })}
               >
-                <option value="">Class name</option>
-                {classes.map((cls) => (
-                  <option key={cls.id} value={cls.id}>
-                    {cls.name}
+                <option value="">No initial enrollment</option>
+                {batches.map((batch) => (
+                  <option key={batch.id} value={batch.id}>
+                    {batch.name}
                   </option>
                 ))}
               </select>
-
-              <input
-                type="number"
-                placeholder="roll number"
-                name="role_number"
-                value={newStudent.role_number}
-                required
-                onChange={handleStudentInfo}
-                className="border border-gray-300 p-2 rounded"
-              />
-
-              <input
-                type="tel"
-                placeholder="parent mobile number"
-                className="border border-gray-300 p-2 rounded"
-                name="parent_mobile_number"
-                value={newStudent.parent_mobile_number}
-                required
-                onChange={handleStudentInfo}
-              />
-
-              <input
-                type="text"
-                placeholder="address"
-                value={newStudent.address}
-                name="address"
-                className="border border-gray-300 p-2 rounded"
-                onChange={handleStudentInfo}
-                required
-              />
-
-              <input
-                type="number"
-                placeholder="Total fee"
-                value={newStudent.total_fee}
-                name="total_fee"
-                onChange={handleStudentInfo}
-                className="border border-gray-300 p-2 rounded"
-                required
-              />
-
-              <input
-                type="number"
-                placeholder="Amount paid"
-                value={newStudent.amount_paid}
-                name="amount_paid"
-                onChange={handleStudentInfo}
-                required
-                className="border border-gray-300 p-2 rounded"
-              />
-            </div>
-            <div className="flex justify-center space-x-2 mt-10">
-              <button
-                type="submit"
-                className="bg-blue-600 hover:bg-blue-700 active:bg-blue-600 text-white px-4 py-2 rounded inline-flex items-center gap-2"
-              >
-                <Save size={16} />
-                Sumbit
-              </button>
-              <button
-                onClick={() => navigate("/admin/dashboard/classes")}
-                end
-                className="bg-gray-500 hover:bg-gray-600 active:bg-gray-500 text-white px-4 py-2 rounded inline-flex items-center gap-2"
-              >
-                <XCircle size={16} />
-                Cancel
-              </button>
-            </div>
-            {error && <p className="text-red-700">{error}</p>}
-          </form>
+            </Field>
+          ) : null}
         </div>
-      )}
+        <div className="mt-4 flex gap-2">
+          <button
+            className="inline-flex items-center gap-2 rounded-md bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            disabled={saving}
+          >
+            <Save size={16} /> {editingId ? "Update Student" : "Create Student"}
+          </button>
+          <button
+            type="button"
+            className="rounded-md border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700"
+            onClick={() => {
+              setForm(emptyStudent);
+              setEditingId(null);
+            }}
+          >
+            Reset
+          </button>
+        </div>
+      </form>
+
+      <DataTable
+        title="Student List"
+        columns={columns}
+        rows={students}
+        loading={loading}
+        error={error}
+        bulkActions={[
+          {
+            label: "Archive",
+            onClick: (rows) =>
+              Promise.all(rows.map((row) => lifecycle(row, "archive"))),
+          },
+          {
+            label: "Restore",
+            onClick: (rows) =>
+              Promise.all(rows.map((row) => lifecycle(row, "restore"))),
+          },
+        ]}
+        actions={(row) => [
+          { label: "Edit", onClick: () => editStudent(row) },
+          { label: "Archive", onClick: () => lifecycle(row, "archive") },
+          { label: "Restore", onClick: () => lifecycle(row, "restore") },
+          { label: "Deactivate", onClick: () => lifecycle(row, "deactivate") },
+        ]}
+      />
     </div>
   );
 }
-export default Admission;

@@ -150,7 +150,7 @@ function IndividaulStudent() {
             <div className="space-y-3 text-gray-800 text-sm md:text-base mt-6 md:mt-0 text-left ">
               <p>{student.name}</p>
               <p>{student.f_name}</p>
-              <p>{student.studentClass_details?.name}</p>
+              <p>{student.current_enrollments?.[0]?.batch_name || "No active batch"}</p>
               <p>{student.role_number}</p>
               <p>{student.parent_mobile_number}</p>
               <p>{student.address}</p>
