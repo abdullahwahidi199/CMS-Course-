@@ -1,21 +1,34 @@
 import { useEffect, useMemo, useState } from "react";
-import { Archive, RotateCcw, Save, UserPlus } from "lucide-react";
+import {
+  Archive,
+  Check,
+  GraduationCap,
+  RotateCcw,
+  Save,
+  UserPlus,
+} from "lucide-react";
 import DataTable from "./shared/DataTable";
 import PageHeader from "./shared/PageHeader";
 import instance from "../api/axiosInstance";
+import { formatApiError } from "../utils/apiErrors";
 
-const emptyStudent = {
-  username: "",
-  password: "",
+const emptyAdmission = {
   first_name: "",
   last_name: "",
   email: "",
   phone: "",
-  f_name: "",
+  guardian_name: "",
   parent_mobile_number: "",
   address: "",
+  create_user: true,
+  username: "",
+  password: "",
+  course: "",
   batch: "",
+  enrollment_date: new Date().toISOString().slice(0, 10),
 };
+
+const steps = ["Profile", "Account", "Enrollment", "Review"];
 
 function inputClass() {
   return "w-full rounded-md border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cyan-600";
@@ -32,9 +45,10 @@ function Field({ label, children }) {
 
 export default function Admission() {
   const [students, setStudents] = useState([]);
+  const [courses, setCourses] = useState([]);
   const [batches, setBatches] = useState([]);
-  const [form, setForm] = useState(emptyStudent);
-  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState(emptyAdmission);
+  const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -43,15 +57,20 @@ export default function Admission() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [studentsResponse, batchesResponse] = await Promise.all([
-        instance.get("/students/"),
-        instance.get("/classes/"),
-      ]);
+      const [studentsResponse, coursesResponse, batchesResponse] =
+        await Promise.all([
+          instance.get("/students/"),
+          instance.get("/courses/"),
+          instance.get("/classes/"),
+        ]);
       setStudents(studentsResponse.data);
+      setCourses(coursesResponse.data);
       setBatches(batchesResponse.data);
     } catch (err) {
       setError(
-        err.response?.data?.detail || err.message || "Could not load students.",
+        err.response?.data?.detail ||
+          err.message ||
+          "Could not load admission data.",
       );
     } finally {
       setLoading(false);
@@ -62,85 +81,86 @@ export default function Admission() {
     fetchData();
   }, []);
 
-  const validate = () => {
-    if (!form.username.trim()) return "Username is required.";
-    if (!editingId && !form.password) return "Password is required.";
-    if (!form.first_name.trim() || !form.last_name.trim())
+  const filteredBatches = useMemo(
+    () =>
+      batches.filter(
+        (batch) =>
+          batch.is_active !== false &&
+          !batch.is_archived &&
+          (!form.course || String(batch.course) === String(form.course)),
+      ),
+    [batches, form.course],
+  );
+
+  const validateStep = () => {
+    if (step === 0 && (!form.first_name.trim() || !form.last_name.trim()))
       return "First name and last name are required.";
+    if (
+      step === 1 &&
+      form.create_user &&
+      (!form.username.trim() || !form.password)
+    )
+      return "Username and password are required.";
+    if (step === 2 && (!form.course || !form.batch))
+      return "Course and batch are required.";
     return "";
   };
 
-  const saveStudent = async (event) => {
+  const nextStep = () => {
+    const validation = validateStep();
+    if (validation) {
+      setError(validation);
+      return;
+    }
+    setError("");
+    setStep((value) => Math.min(value + 1, steps.length - 1));
+  };
+
+  const submitAdmission = async (event) => {
     event.preventDefault();
-    const validation = validate();
+    const validation = validateStep();
     if (validation) {
       setError(validation);
       return;
     }
     setSaving(true);
+    setMessage("");
     try {
-      const payload = { ...form };
-      const batchId = payload.batch;
-      delete payload.batch;
-      if (editingId && !payload.password) delete payload.password;
-
-      let saved;
-      if (editingId) {
-        const response = await instance.patch(
-          `/students/${editingId}/`,
-          payload,
-        );
-        saved = response.data;
-        setMessage("Student updated.");
-      } else {
-        const response = await instance.post("/students/", payload);
-        saved = response.data;
-        setMessage("Student account created.");
-      }
-
-      const batch = batches.find((item) => Number(item.id) === Number(batchId));
-      if (!editingId && batch) {
-        await instance.post("/enrollments/", {
-          student: saved.id,
-          batch: batch.id,
-          course: batch.course,
-          enrollment_date: new Date().toISOString().slice(0, 10),
+      await instance.post("/admissions/", {
+        student: {
+          first_name: form.first_name,
+          last_name: form.last_name,
+          email: form.email,
+          phone: form.phone,
+          guardian_name: form.guardian_name,
+          parent_mobile_number: form.parent_mobile_number,
+          address: form.address,
+        },
+        account: {
+          create_user: form.create_user,
+          username: form.username,
+          password: form.password,
+          email: form.email,
+          phone: form.phone,
+        },
+        academic: {
+          batch: form.batch,
+          enrollment_date: form.enrollment_date,
           status: "active",
-        });
-      }
-
-      setForm(emptyStudent);
-      setEditingId(null);
+        },
+      });
+      setForm(emptyAdmission);
+      setStep(0);
       setError("");
+      setMessage(
+        "Admission completed. Enrollment billing and current invoice were created automatically when a fee plan matched.",
+      );
       await fetchData();
     } catch (err) {
-      setError(
-        err.response?.data
-          ? JSON.stringify(err.response.data)
-          : "Could not save student.",
-      );
+      setError(formatApiError(err, "Could not complete admission."));
     } finally {
       setSaving(false);
     }
-  };
-
-  const editStudent = (student) => {
-    const [fallbackFirst, ...rest] = (student.name || "").split(" ");
-    setEditingId(student.id);
-    setForm({
-      ...emptyStudent,
-      username: student.username || "",
-      first_name: student.first_name || fallbackFirst || "",
-      last_name: student.last_name || rest.join(" "),
-      email: student.email || "",
-      phone: student.phone || "",
-      f_name: student.f_name || "",
-      role_number: student.role_number || "",
-      parent_mobile_number: student.parent_mobile_number || "",
-      address: student.address || "",
-      total_fee: student.total_fee || "0",
-      amount_paid: student.amount_paid || "0",
-    });
   };
 
   const lifecycle = async (student, action) => {
@@ -151,11 +171,14 @@ export default function Admission() {
 
   const columns = useMemo(
     () => [
-      { key: "username", label: "Username" },
+      {
+        key: "student_number_display",
+        label: "Student No",
+        render: (row) => row.student_number_display || row.student_number,
+      },
       { key: "name", label: "Name" },
       { key: "email", label: "Email" },
       { key: "phone", label: "Phone" },
-      { key: "role_number", label: "Roll No" },
       {
         key: "batch",
         label: "Current Batch",
@@ -173,9 +196,10 @@ export default function Admission() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Student Management"
-        description="Create student login accounts, manage profiles, enrollments, and lifecycle status."
+        title="Admissions"
+        description="Create student identity, account, enrollment, billing profile, and first invoice in one controlled workflow."
       />
+
       {message ? (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
           {message}
@@ -189,150 +213,246 @@ export default function Admission() {
 
       <form
         className="rounded-md bg-white p-4 shadow-sm"
-        onSubmit={saveStudent}
+        onSubmit={submitAdmission}
       >
-        <div className="mb-4 flex items-center gap-2 font-semibold text-gray-900">
-          <UserPlus size={18} />{" "}
-          {editingId ? "Edit Student" : "Create Student Account"}
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {steps.map((label, index) => (
+            <button
+              key={label}
+              type="button"
+              className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${index === step ? "bg-cyan-700 text-white" : "bg-gray-100 text-gray-700"}`}
+              onClick={() => setStep(index)}
+            >
+              {index < step ? <Check size={15} /> : <GraduationCap size={15} />}
+              {label}
+            </button>
+          ))}
         </div>
-        <div className="grid gap-4 md:grid-cols-4">
-          <Field label="Username">
-            <input
-              className={inputClass()}
-              value={form.username}
-              onChange={(e) => setForm({ ...form, username: e.target.value })}
-              required
-            />
-          </Field>
-          <Field label="Password">
-            <input
-              className={inputClass()}
-              type="password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              required={!editingId}
-            />
-          </Field>
-          <Field label="First Name">
-            <input
-              className={inputClass()}
-              value={form.first_name}
-              onChange={(e) => setForm({ ...form, first_name: e.target.value })}
-              required
-            />
-          </Field>
-          <Field label="Last Name">
-            <input
-              className={inputClass()}
-              value={form.last_name}
-              onChange={(e) => setForm({ ...form, last_name: e.target.value })}
-              required
-            />
-          </Field>
-          <Field label="Email">
-            <input
-              className={inputClass()}
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-            />
-          </Field>
-          <Field label="Phone">
-            <input
-              className={inputClass()}
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            />
-          </Field>
-          <Field label="Father/Guardian Name">
-            <input
-              className={inputClass()}
-              value={form.f_name}
-              onChange={(e) => setForm({ ...form, f_name: e.target.value })}
-            />
-          </Field>
-          <Field label="Roll Number">
-            <input
-              className={inputClass()}
-              value={form.role_number}
-              onChange={(e) =>
-                setForm({ ...form, role_number: e.target.value })
-              }
-            />
-          </Field>
-          <Field label="Parent Mobile">
-            <input
-              className={inputClass()}
-              value={form.parent_mobile_number}
-              onChange={(e) =>
-                setForm({ ...form, parent_mobile_number: e.target.value })
-              }
-            />
-          </Field>
-          <Field label="Address">
-            <input
-              className={inputClass()}
-              value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
-            />
-          </Field>
-          <Field label="Total Fee">
-            <input
-              className={inputClass()}
-              type="number"
-              value={form.total_fee}
-              onChange={(e) => setForm({ ...form, total_fee: e.target.value })}
-            />
-          </Field>
-          <Field label="Amount Paid">
-            <input
-              className={inputClass()}
-              type="number"
-              value={form.amount_paid}
-              onChange={(e) =>
-                setForm({ ...form, amount_paid: e.target.value })
-              }
-            />
-          </Field>
-          {!editingId ? (
-            <Field label="Initial Batch">
+
+        {step === 0 ? (
+          <div className="grid gap-4 md:grid-cols-3">
+            <Field label="First Name">
+              <input
+                className={inputClass()}
+                value={form.first_name}
+                onChange={(e) =>
+                  setForm({ ...form, first_name: e.target.value })
+                }
+                required
+              />
+            </Field>
+            <Field label="Last Name">
+              <input
+                className={inputClass()}
+                value={form.last_name}
+                onChange={(e) =>
+                  setForm({ ...form, last_name: e.target.value })
+                }
+                required
+              />
+            </Field>
+            <Field label="Email">
+              <input
+                className={inputClass()}
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
+            </Field>
+            <Field label="Phone">
+              <input
+                className={inputClass()}
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              />
+            </Field>
+            <Field label="Guardian Name">
+              <input
+                className={inputClass()}
+                value={form.guardian_name}
+                onChange={(e) =>
+                  setForm({ ...form, guardian_name: e.target.value })
+                }
+              />
+            </Field>
+            <Field label="Parent Mobile">
+              <input
+                className={inputClass()}
+                value={form.parent_mobile_number}
+                onChange={(e) =>
+                  setForm({ ...form, parent_mobile_number: e.target.value })
+                }
+              />
+            </Field>
+            <Field label="Address">
+              <input
+                className={inputClass()}
+                value={form.address}
+                onChange={(e) => setForm({ ...form, address: e.target.value })}
+              />
+            </Field>
+          </div>
+        ) : null}
+
+        {step === 1 ? (
+          <div className="grid gap-4 md:grid-cols-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <input
+                type="checkbox"
+                checked={form.create_user}
+                onChange={(e) =>
+                  setForm({ ...form, create_user: e.target.checked })
+                }
+              />
+              Create user account
+            </label>
+            {form.create_user ? (
+              <>
+                <Field label="Username">
+                  <input
+                    className={inputClass()}
+                    value={form.username}
+                    onChange={(e) =>
+                      setForm({ ...form, username: e.target.value })
+                    }
+                    required
+                  />
+                </Field>
+                <Field label="Password">
+                  <>
+                    <input
+                      className={inputClass()}
+                      type="password"
+                      minLength={6}
+                      value={form.password}
+                      onChange={(e) =>
+                        setForm({ ...form, password: e.target.value })
+                      }
+                      required
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Use at least 6 characters.</p>
+                  </>
+                </Field>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+
+        {step === 2 ? (
+          <div className="grid gap-4 md:grid-cols-3">
+            <Field label="Course">
+              <select
+                className={inputClass()}
+                value={form.course}
+                onChange={(e) =>
+                  setForm({ ...form, course: e.target.value, batch: "" })
+                }
+                required
+              >
+                <option value="">Select course</option>
+                {courses
+                  .filter((course) => course.is_active !== false && !course.is_archived)
+                  .map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Batch">
               <select
                 className={inputClass()}
                 value={form.batch}
                 onChange={(e) => setForm({ ...form, batch: e.target.value })}
+                required
               >
-                <option value="">No initial enrollment</option>
-                {batches.map((batch) => (
+                <option value="">Select batch</option>
+                {filteredBatches.map((batch) => (
                   <option key={batch.id} value={batch.id}>
+                    {batch.course_name ? `${batch.course_name} - ` : ""}
                     {batch.name}
                   </option>
                 ))}
               </select>
             </Field>
+            <Field label="Enrollment Date">
+              <input
+                className={inputClass()}
+                type="date"
+                value={form.enrollment_date}
+                onChange={(e) =>
+                  setForm({ ...form, enrollment_date: e.target.value })
+                }
+              />
+            </Field>
+          </div>
+        ) : null}
+
+        {step === 3 ? (
+          <div className="grid gap-3 text-sm text-gray-700 md:grid-cols-2">
+            <div>
+              <span className="font-semibold">Student:</span> {form.first_name}{" "}
+              {form.last_name}
+            </div>
+            <div>
+              <span className="font-semibold">Account:</span>{" "}
+              {form.create_user ? form.username : "Generated system account"}
+            </div>
+            <div>
+              <span className="font-semibold">Course:</span>{" "}
+              {courses.find(
+                (course) => String(course.id) === String(form.course),
+              )?.name || "-"}
+            </div>
+            <div>
+              <span className="font-semibold">Batch:</span>{" "}
+              {batches.find((batch) => String(batch.id) === String(form.batch))
+                ?.name || "-"}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {step > 0 ? (
+            <button
+              type="button"
+              className="rounded-md border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700"
+              onClick={() => setStep(step - 1)}
+            >
+              Back
+            </button>
           ) : null}
-        </div>
-        <div className="mt-4 flex gap-2">
-          <button
-            className="inline-flex items-center gap-2 rounded-md bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-            disabled={saving}
-          >
-            <Save size={16} /> {editingId ? "Update Student" : "Create Student"}
-          </button>
+          {step < steps.length - 1 ? (
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-md bg-cyan-700 px-4 py-2 text-sm font-semibold text-white"
+              onClick={nextStep}
+            >
+              <UserPlus size={16} /> Continue
+            </button>
+          ) : (
+            <button
+              disabled={saving}
+              className="inline-flex items-center gap-2 rounded-md bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              <Save size={16} /> Complete Admission
+            </button>
+          )}
           <button
             type="button"
-            className="rounded-md border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700"
+            className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700"
             onClick={() => {
-              setForm(emptyStudent);
-              setEditingId(null);
+              setForm(emptyAdmission);
+              setStep(0);
             }}
           >
-            Reset
+            <RotateCcw size={16} /> Reset
           </button>
         </div>
       </form>
 
       <DataTable
-        title="Student List"
+        title="Student Identities"
         columns={columns}
         rows={students}
         loading={loading}
@@ -350,8 +470,11 @@ export default function Admission() {
           },
         ]}
         actions={(row) => [
-          { label: "Edit", onClick: () => editStudent(row) },
-          { label: "Archive", onClick: () => lifecycle(row, "archive") },
+          {
+            label: "Archive",
+            icon: Archive,
+            onClick: () => lifecycle(row, "archive"),
+          },
           { label: "Restore", onClick: () => lifecycle(row, "restore") },
           { label: "Deactivate", onClick: () => lifecycle(row, "deactivate") },
         ]}

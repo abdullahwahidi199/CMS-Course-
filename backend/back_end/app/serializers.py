@@ -1,7 +1,8 @@
 from rest_framework import serializers
-from .models import Students,Teachers,Events,Classes,Attendance,Staff,Expenses,ExpenseHistory,RoomOfClass,User,Marks
+from django.db.models import Sum
+from .models import Students,Teachers,Events,Classes,Attendance,AttendanceSession,Staff,Expenses,ExpenseCategory,Budget,RecurringExpense,ExpenseHistory,RoomOfClass,User,Marks
 from .models import Course, Enrollment, Role
-from .models import Assignment,Submission,Tenant
+from .models import Assignment,PromotionHistory,Submission,Tenant
 from .services.student_service import create_student, update_student
 from .services.teacher_service import create_teacher, update_teacher
 
@@ -12,9 +13,54 @@ class TenantSerializer(serializers.ModelSerializer):
         model = Tenant
         fields = "__all__"
 class AttendanceSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source="student.name", read_only=True)
+    student_number = serializers.CharField(source="student.formatted_student_number", read_only=True)
+    guardian_name = serializers.CharField(source="student.f_name", read_only=True)
+    course_name = serializers.CharField(source="course.name", read_only=True)
+    batch_name = serializers.CharField(source="class_fk.name", read_only=True)
+    teacher_name = serializers.CharField(source="teacher.full_name", read_only=True)
+    marked_by_username = serializers.CharField(source="marked_by.username", read_only=True)
+
     class Meta:
         model=Attendance
         fields='__all__'
+
+
+class AttendanceSessionSerializer(serializers.ModelSerializer):
+    course_name = serializers.CharField(source="course.name", read_only=True)
+    batch_name = serializers.CharField(source="batch.name", read_only=True)
+    teacher_name = serializers.CharField(source="teacher.full_name", read_only=True)
+    records = AttendanceSerializer(many=True, read_only=True)
+    present_count = serializers.SerializerMethodField()
+    absent_count = serializers.SerializerMethodField()
+    late_count = serializers.SerializerMethodField()
+    leave_count = serializers.SerializerMethodField()
+    attendance_percentage = serializers.SerializerMethodField()
+
+    class Meta:
+        model=AttendanceSession
+        fields='__all__'
+        read_only_fields=["tenant","created_by","approved_by","approved_at","created_at","updated_at"]
+
+    def _records(self, obj):
+        return obj.records.all()
+
+    def get_present_count(self, obj):
+        return self._records(obj).filter(status=Attendance.Status.PRESENT).count()
+
+    def get_absent_count(self, obj):
+        return self._records(obj).filter(status=Attendance.Status.ABSENT).count()
+
+    def get_late_count(self, obj):
+        return self._records(obj).filter(status=Attendance.Status.LATE).count()
+
+    def get_leave_count(self, obj):
+        return self._records(obj).filter(status__in=[Attendance.Status.EXCUSED, Attendance.Status.SICK_LEAVE]).count()
+
+    def get_attendance_percentage(self, obj):
+        total = self._records(obj).exclude(status=Attendance.Status.HOLIDAY).count()
+        attended = self._records(obj).filter(status__in=[Attendance.Status.PRESENT, Attendance.Status.LATE, Attendance.Status.EXCUSED]).count()
+        return round((attended / total) * 100, 2) if total else 0
 
 
 class MarksSerializer(serializers.ModelSerializer):
@@ -61,7 +107,7 @@ class ClassesMiniSerialiser(serializers.ModelSerializer):
 
     class Meta:
         model=Classes
-        fields=['id','name','course','course_name','startDate','endDate','roomOfClass','start_time','end_time','roomOfClass_details']
+        fields=['id','name','course','course_name','startDate','endDate','roomOfClass','start_time','end_time','roomOfClass_details','capacity','is_active','is_archived']
 
 
 class EnrollmentSerializer(serializers.ModelSerializer):
@@ -74,6 +120,46 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ["tenant", "created_by", "created_at", "updated_at"]
 
+
+class PromotionHistorySerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source="student.name", read_only=True)
+    student_number = serializers.CharField(source="student.formatted_student_number", read_only=True)
+    old_class_name = serializers.CharField(source="old_class.name", read_only=True)
+    new_class_name = serializers.CharField(source="new_class.name", read_only=True)
+    old_course_name = serializers.CharField(source="old_class.course.name", read_only=True)
+    new_course_name = serializers.CharField(source="new_class.course.name", read_only=True)
+    promoted_by_username = serializers.CharField(source="promoted_by.username", read_only=True)
+
+    class Meta:
+        model = PromotionHistory
+        fields = [
+            "id",
+            "tenant",
+            "student",
+            "student_name",
+            "student_number",
+            "old_enrollment",
+            "new_enrollment",
+            "old_class",
+            "old_class_name",
+            "old_course_name",
+            "new_class",
+            "new_class_name",
+            "new_course_name",
+            "promotion_date",
+            "promoted_by",
+            "promoted_by_username",
+            "remarks",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class PromotionCreateSerializer(serializers.Serializer):
+    student = serializers.IntegerField()
+    new_batch = serializers.IntegerField()
+    promotion_date = serializers.DateField(required=False)
+    remarks = serializers.CharField(required=False, allow_blank=True)
 
 
 class StudentsSerializer(serializers.ModelSerializer):
@@ -88,21 +174,39 @@ class StudentsSerializer(serializers.ModelSerializer):
     marks=MarksSerializer(many=True,read_only=True)
     current_enrollments=serializers.SerializerMethodField()
     previous_enrollments=serializers.SerializerMethodField()
+    student_number_display = serializers.CharField(source="formatted_student_number", read_only=True)
+    billing_total = serializers.SerializerMethodField()
+    billing_paid = serializers.SerializerMethodField()
+    billing_outstanding = serializers.SerializerMethodField()
+    billing_invoice_count = serializers.SerializerMethodField()
     class Meta:
         model=Students
         fields=[
             'id','username','password','first_name','last_name','email','phone','user_is_active',
-            'name','f_name','role_number','parent_mobile_number','student_number','address',
-            'total_fee','amount_paid','enrollment_date','is_active','is_archived',
-            'current_enrollments','previous_enrollments','attendances','marks'
+            'name','f_name','role_number','parent_mobile_number','student_number','student_number_display','address',
+            'enrollment_date','is_active','is_archived',
+            'current_enrollments','previous_enrollments','attendances','marks',
+            'billing_total','billing_paid','billing_outstanding','billing_invoice_count'
         ]
-        read_only_fields = ["name", "student_number", "enrollment_date", "is_archived"]
+        read_only_fields = ["name", "role_number", "student_number", "student_number_display", "enrollment_date", "is_archived"]
 
     def get_current_enrollments(self, obj):
         return EnrollmentSerializer(obj.enrollments.filter(status=Enrollment.Status.ACTIVE), many=True).data
 
     def get_previous_enrollments(self, obj):
         return EnrollmentSerializer(obj.enrollments.exclude(status=Enrollment.Status.ACTIVE), many=True).data
+
+    def get_billing_total(self, obj):
+        return getattr(obj, "billing_total", 0) or 0
+
+    def get_billing_paid(self, obj):
+        return getattr(obj, "billing_paid", 0) or 0
+
+    def get_billing_outstanding(self, obj):
+        return getattr(obj, "billing_outstanding", 0) or 0
+
+    def get_billing_invoice_count(self, obj):
+        return getattr(obj, "billing_invoice_count", 0) or 0
     
     def validate(self, attrs):
         user_data = attrs.get("user", {})
@@ -146,10 +250,11 @@ class TeachersSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", required=False)
     password = serializers.CharField(write_only=True, required=False, allow_blank=True)
     user_is_active = serializers.BooleanField(source="user.is_active", read_only=True)
+    user_is_deactivated = serializers.BooleanField(source="user.is_deactivated", read_only=True)
     classes=ClassesMiniSerialiser(many=True,read_only=True)
     class Meta:
         model=Teachers
-        fields=['id','username','password','user_is_active','full_name','email_address','subject','phone_number','department','classes','is_active','is_archived']
+        fields=['id','username','password','user_is_active','user_is_deactivated','full_name','email_address','subject','phone_number','department','classes','is_active','is_archived']
         read_only_fields = ["is_archived"]
 
     def validate(self, attrs):
@@ -165,11 +270,12 @@ class TeachersSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         user_data = validated_data.pop("user", {})
         password = validated_data.pop("password")
+        email = validated_data.pop("email_address", "")
         return create_teacher(
             tenant=validated_data.pop("tenant"),
             username=user_data.get("username"),
             password=password,
-            email=validated_data.get("email_address"),
+            email=email,
             **validated_data,
         )
 
@@ -210,7 +316,7 @@ class ClassesSerializer(serializers.ModelSerializer):
     teachers=serializers.PrimaryKeyRelatedField(
         many=True,queryset=Teachers.objects.all(), required=False
     )
-    teachers_details=TeachersSerializer(many=True,source='teachers',required=False)
+    teachers_details=TeachersSerializer(many=True, source='teachers', read_only=True)
     roomOfClass_details = RoomMiniSerializer(
         source='roomOfClass', read_only=True
     )
@@ -221,7 +327,7 @@ class ClassesSerializer(serializers.ModelSerializer):
     class Meta:
         model=Classes
         fields=['id','name','course','course_name','subjects','teachers','teachers_details','startDate','endDate','enrollments','student_count','teachers_count',
-                'total_earnings','roomOfClass','start_time','end_time','assignments','roomOfClass_details','is_active','is_archived']
+                'total_earnings','roomOfClass','start_time','end_time','capacity','assignments','roomOfClass_details','is_active','is_archived']
 
     def get_total_earnings(self, obj):
         return obj.total_earnings()
@@ -235,102 +341,44 @@ class ClassesSerializer(serializers.ModelSerializer):
 
 class CourseSerializer(serializers.ModelSerializer):
     batches = ClassesMiniSerialiser(many=True, read_only=True)
+    batch_count = serializers.SerializerMethodField()
+    active_student_count = serializers.SerializerMethodField()
+    total_revenue = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
-        fields = "__all__"
+        fields = [
+            "id",
+            "tenant",
+            "name",
+            "code",
+            "description",
+            "duration_weeks",
+            "fee",
+            "is_active",
+            "is_archived",
+            "archived_at",
+            "created_at",
+            "updated_at",
+            "batches",
+            "batch_count",
+            "active_student_count",
+            "total_revenue",
+        ]
+        read_only_fields = ["tenant", "archived_at", "created_at", "updated_at", "batch_count", "active_student_count", "total_revenue", "batches"]
+
+    def get_batch_count(self, obj):
+        return obj.batches.count()
+
+    def get_active_student_count(self, obj):
+        return Enrollment.objects.filter(course=obj, status=Enrollment.Status.ACTIVE).count()
+
+    def get_total_revenue(self, obj):
+        from .models import Invoice
+        return Invoice.objects.filter(course=obj).exclude(status=Invoice.Status.CANCELLED).aggregate(total=Sum("paid_amount"))["total"] or 0
 
     def get_teachers_count(self, obj):
-        return len(obj.teachers.all())
-
-    
-    def update(self,instance,validated_data):
-        new_teachers=validated_data.pop('teachers',[])
-        instance=super().update(instance,validated_data)
-
-        for teacher in new_teachers:
-            instance.teachers.add(teacher)
-        return instance
-    
-    def update(self,instance,validated_data):
-        if 'teachers' in validated_data:
-            teachers=validated_data.pop('teachers')
-            instance.teachers.set(teachers)
-        return super().update(instance,validated_data)
-
-    
-    def validate(self, data):
-        
-        instance_id = self.instance.id if self.instance else None
-
-        
-        start_time = data.get('start_time', getattr(self.instance, 'start_time', None))
-        end_time = data.get('end_time', getattr(self.instance, 'end_time', None))
-
-        
-        room_id = None
-        if 'roomOfClass' in data:
-            room_val = data.get('roomOfClass')
-            
-            if isinstance(room_val, dict):
-                room_id = room_val.get('id')
-            else:
-                room_id = room_val
-        else:
-           
-            room_id = getattr(self.instance, 'roomOfClass_id', None)
-
-        
-        if 'teachers' in data:
-            
-            teachers_in = data.get('teachers')  
-            if teachers_in is None:
-                teacher_ids = []
-            else:
-               
-                if len(teachers_in) > 0 and hasattr(teachers_in[0], 'id'):
-                    teacher_ids = [t.id for t in teachers_in]
-                else:
-                    teacher_ids = [int(t) for t in teachers_in]
-        else:
-            if self.instance:
-                teacher_ids = list(self.instance.teachers.values_list('id', flat=True))
-            else:
-                teacher_ids = []
-
-        
-        if room_id is not None and start_time and end_time:
-            room_conflict_qs = Classes.objects.filter(
-                roomOfClass_id=room_id,
-                start_time__lt=end_time,
-                end_time__gt=start_time
-            )
-            if instance_id:
-                room_conflict_qs = room_conflict_qs.exclude(pk=instance_id)
-            if room_conflict_qs.exists():
-                raise serializers.ValidationError({
-                    'non_field_errors': ["This room is taken at this time!"]
-                })
-
-        
-        if teacher_ids and start_time and end_time:
-           
-            from .models import Teachers as TeacherModel
-            teachers_qs = TeacherModel.objects.filter(id__in=teacher_ids)
-            for teacher in teachers_qs:
-                teacher_conflict_qs = Classes.objects.filter(
-                    teachers=teacher,
-                    start_time__lt=end_time,
-                    end_time__gt=start_time
-                )
-                if instance_id:
-                    teacher_conflict_qs = teacher_conflict_qs.exclude(pk=instance_id)
-                if teacher_conflict_qs.exists():
-                    raise serializers.ValidationError({
-                        'non_field_errors': [f"Teacher {teacher.name} already has a class at this time."]
-                    })
-
-        return data
+        return 0
 
 
 class StaffSerializer(serializers.ModelSerializer):
@@ -338,10 +386,52 @@ class StaffSerializer(serializers.ModelSerializer):
         model=Staff
         fields='__all__'
 
+class ExpenseCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model=ExpenseCategory
+        fields='__all__'
+        read_only_fields=["tenant","created_at"]
+
+
 class ExpensesSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source="category.name", read_only=True)
+    created_by_username = serializers.CharField(source="created_by.username", read_only=True)
+    approved_by_username = serializers.CharField(source="approved_by.username", read_only=True)
+
     class Meta:
         model=Expenses
         fields='__all__'
+        read_only_fields=["tenant","expense_number","created_by","approved_by","approval_date","created_at","updated_at"]
+
+    def validate(self, attrs):
+        title = attrs.get("title") or attrs.get("name")
+        if not title:
+            raise serializers.ValidationError({"title": "Expense title is required."})
+        amount = attrs.get("amount", getattr(self.instance, "amount", None))
+        if amount is not None and amount <= 0:
+            raise serializers.ValidationError({"amount": "Amount must be greater than zero."})
+        return attrs
+
+
+class BudgetSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source="category.name", read_only=True)
+    spent_amount = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    remaining_amount = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    used_percentage = serializers.FloatField(read_only=True)
+
+    class Meta:
+        model=Budget
+        fields='__all__'
+        read_only_fields=["tenant","created_at","updated_at","spent_amount","remaining_amount","used_percentage"]
+
+
+class RecurringExpenseSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source="category.name", read_only=True)
+
+    class Meta:
+        model=RecurringExpense
+        fields='__all__'
+        read_only_fields=["tenant","created_at"]
     
 class ExpenseHistorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -353,3 +443,61 @@ class RoomSerializer(serializers.ModelSerializer):
         model=RoomOfClass
         fields=['id','name','classes']
 
+
+# class AdmissionSerializer(serializers.Serializer):
+#     student = serializers.DictField()
+#     account = serializers.DictField(required=False)
+#     academic = serializers.DictField()
+
+#     def validate(self, attrs):
+#         student = attrs.get("student") or {}
+#         account = attrs.get("account") or {}
+#         academic = attrs.get("academic") or {}
+#         if not student.get("first_name") or not student.get("last_name"):
+#             raise serializers.ValidationError({"student": "First name and last name are required."})
+#         if account.get("create_user", True) and (not account.get("username") or not account.get("password")):
+#             raise serializers.ValidationError({"account": "Username and password are required when account creation is enabled."})
+#         if not academic.get("batch"):
+#             raise serializers.ValidationError({"academic": "Batch is required."})
+#         return attrs
+
+
+
+class AdmissionStudentSerializer(serializers.Serializer):
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone = serializers.CharField(required=False, allow_blank=True)
+    guardian_name = serializers.CharField(required=False, allow_blank=True)
+    parent_mobile_number = serializers.CharField(required=False, allow_blank=True)
+    address = serializers.CharField(required=False, allow_blank=True)
+
+
+class AdmissionAccountSerializer(serializers.Serializer):
+    create_user = serializers.BooleanField(default=True)
+    username = serializers.CharField(required=False)
+    password = serializers.CharField(required=False)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone = serializers.CharField(required=False, allow_blank=True)
+
+
+class AdmissionAcademicSerializer(serializers.Serializer):
+    batch = serializers.IntegerField()
+    enrollment_date = serializers.DateField(required=False)
+    status = serializers.CharField(default="active")
+
+class AdmissionSerializer(serializers.Serializer):
+    student = AdmissionStudentSerializer()
+    account = AdmissionAccountSerializer(required=False)
+    academic = AdmissionAcademicSerializer()
+
+    def validate(self, attrs):
+        account = attrs.get("account") or {}
+
+        if account.get("create_user", True):
+            if not account.get("username") or not account.get("password"):
+                raise serializers.ValidationError({
+                    "account": "Username and password are required when account creation is enabled."
+                })
+
+        return attrs

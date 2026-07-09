@@ -178,4 +178,24 @@
     height: 148mm;  
     margin: 0;
   }
+
+  body:has(.report-print) {
+    background: white;
+  }
+
+  body:has(.report-print) * {
+    visibility: visible;
+  }
+
+  body:has(.report-print) .print\:hidden,
+  body:has(.report-print) button,
+  body:has(.report-print) select {
+    display: none !important;
+  }
+
+  body:has(.report-print) .report-print {
+    position: static;
+    width: auto;
+    margin: 0;
+  }
 }

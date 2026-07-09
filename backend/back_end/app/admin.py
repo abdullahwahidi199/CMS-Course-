@@ -111,9 +111,9 @@ class StationeryPurchaseItemInline(admin.TabularInline):
 
 @admin.register(StationeryPurchase)
 class StationeryPurchaseAdmin(admin.ModelAdmin):
-    list_display = ("receipt_number", "student", "date", "total", "payment_status")
+    list_display = ("receipt_number", "date", "total", "payment_status")
     list_filter = ("payment_status", "date")
-    search_fields = ("receipt_number", "student__name")
+    search_fields = ("receipt_number",)
     inlines = [StationeryPurchaseItemInline]
 
 

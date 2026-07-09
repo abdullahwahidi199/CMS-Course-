@@ -23,6 +23,7 @@ class Tenant(models.Model):
     null=True,
     blank=True
 )
+    notification_settings = models.JSONField(default=dict, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -222,7 +223,7 @@ class Classes(SoftArchiveMixin):
         
     
     def total_earnings(self):
-        return self.enrollments.aggregate(total=models.Sum('student__amount_paid'))['total'] or 0
+        return self.invoices.exclude(status=Invoice.Status.CANCELLED).aggregate(total=models.Sum("paid_amount"))["total"] or 0
     
     
     def __str__(self):
@@ -241,15 +242,13 @@ class Students(models.Model):
     name=models.CharField(max_length=100)
     f_name=models.CharField(max_length=100)
     user = models.OneToOneField(User, on_delete=models.PROTECT, related_name="student_profile")
-    role_number=models.CharField(max_length=20)
+    role_number=models.CharField(max_length=20, blank=True)
     parent_mobile_number=models.CharField(max_length=20)
     address=models.CharField(max_length=200)
     student_number = models.PositiveIntegerField(
             null=True,
             blank=True
         )
-    total_fee=models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    amount_paid=models.DecimalField(max_digits=10, decimal_places=2, default=0)
     enrollment_date = models.DateField(default=timezone.localdate)
     is_active = models.BooleanField(default=True)
     is_archived = models.BooleanField(default=False)
@@ -257,13 +256,21 @@ class Students(models.Model):
     def save(self, *args, **kwargs):
         if not self.pk and not self.student_number:
             last_number = Students.objects.filter(
+                tenant=self.tenant
             ).aggregate(
                 max_number=Max('student_number')
             )['max_number']
 
             self.student_number = (last_number or 0) + 1
+        if not self.role_number and self.student_number:
+            self.role_number = self.formatted_student_number
 
         super().save(*args, **kwargs)
+
+    @property
+    def formatted_student_number(self):
+        year = (self.enrollment_date or timezone.localdate()).year
+        return f"ST{year}{int(self.student_number or 0):05d}"
 
     
     def __str__(self):
@@ -284,7 +291,9 @@ class Students(models.Model):
 
 class Enrollment(models.Model):
     class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
         ACTIVE = "active", "Active"
+        SUSPENDED = "suspended", "Suspended"
         COMPLETED = "completed", "Completed"
         DROPPED = "dropped", "Dropped"
         TRANSFERRED = "transferred", "Transferred"
@@ -321,6 +330,30 @@ class Enrollment(models.Model):
 
     def __str__(self):
         return f"{self.student.name} - {self.batch.name}"
+
+
+class PromotionHistory(models.Model):
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="promotion_histories")
+    student = models.ForeignKey(Students, on_delete=models.PROTECT, related_name="promotion_histories")
+    old_enrollment = models.ForeignKey(Enrollment, on_delete=models.PROTECT, related_name="promotions_from", null=True, blank=True)
+    new_enrollment = models.ForeignKey(Enrollment, on_delete=models.PROTECT, related_name="promotions_to")
+    old_class = models.ForeignKey(Classes, on_delete=models.PROTECT, related_name="promotions_from")
+    new_class = models.ForeignKey(Classes, on_delete=models.PROTECT, related_name="promotions_to")
+    promotion_date = models.DateField(default=timezone.localdate)
+    promoted_by = models.ForeignKey(User, on_delete=models.SET_NULL, related_name="promotions_performed", null=True, blank=True)
+    remarks = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-promotion_date", "-created_at"]
+        indexes = [
+            models.Index(fields=["tenant", "promotion_date"]),
+            models.Index(fields=["student", "promotion_date"]),
+            models.Index(fields=["new_class", "promotion_date"]),
+        ]
+
+    def __str__(self):
+        return f"{self.student.name}: {self.old_class.name} -> {self.new_class.name}"
 
 class Marks(models.Model):
     tenant = models.ForeignKey(
@@ -378,7 +411,46 @@ class Events(models.Model):
 
 
 
+class AttendanceSession(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        OPEN = "open", "Open"
+        SUBMITTED = "submitted", "Submitted"
+        APPROVED = "approved", "Approved"
+        LOCKED = "locked", "Locked"
+
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="attendance_sessions", null=True, blank=True)
+    batch = models.ForeignKey(Classes, on_delete=models.PROTECT, related_name="attendance_sessions")
+    course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="attendance_sessions", null=True, blank=True)
+    teacher = models.ForeignKey(Teachers, on_delete=models.SET_NULL, related_name="attendance_sessions", null=True, blank=True)
+    date = models.DateField(default=timezone.localdate)
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+    session_topic = models.CharField(max_length=200, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, related_name="created_attendance_sessions", null=True, blank=True)
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, related_name="approved_attendance_sessions", null=True, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-date", "-created_at"]
+        unique_together = ("tenant", "batch", "date")
+
+    def __str__(self):
+        return f"{self.batch.name} - {self.date}"
+
+
 class Attendance(models.Model):
+    class Status(models.TextChoices):
+        PRESENT = "present", "Present"
+        ABSENT = "absent", "Absent"
+        LATE = "late", "Late"
+        EXCUSED = "excused", "Excused"
+        SICK_LEAVE = "sick_leave", "Sick Leave"
+        HOLIDAY = "holiday", "Holiday"
+
     tenant = models.ForeignKey(
         Tenant,
         on_delete=models.CASCADE,
@@ -386,14 +458,27 @@ class Attendance(models.Model):
         null=True,
         blank=True
     )
+    session=models.ForeignKey(AttendanceSession,on_delete=models.CASCADE,related_name='records',null=True,blank=True)
     enrollment=models.ForeignKey(Enrollment,on_delete=models.PROTECT,related_name='attendances',null=True,blank=True)
     student=models.ForeignKey(Students,on_delete=models.PROTECT,related_name='attendances')
     class_fk=models.ForeignKey(Classes,on_delete=models.PROTECT,related_name='attendances')    
+    course=models.ForeignKey(Course,on_delete=models.PROTECT,related_name='attendances',null=True,blank=True)
+    teacher=models.ForeignKey(Teachers,on_delete=models.SET_NULL,related_name='marked_attendances',null=True,blank=True)
     date=models.DateField()
+    status=models.CharField(max_length=20,choices=Status.choices,default=Status.ABSENT)
     is_present=models.BooleanField(default=False)
+    check_in_time=models.TimeField(null=True,blank=True)
+    check_out_time=models.TimeField(null=True,blank=True)
+    remarks=models.TextField(blank=True)
+    reason_for_absence=models.TextField(blank=True)
+    marked_by=models.ForeignKey(User,on_delete=models.SET_NULL,related_name='marked_attendances',null=True,blank=True)
+    approved_by=models.ForeignKey(User,on_delete=models.SET_NULL,related_name='approved_attendances',null=True,blank=True)
+    is_locked=models.BooleanField(default=False)
+    created_at=models.DateTimeField(default=timezone.now)
+    updated_at=models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together=('student','date')
+        unique_together=('student','date','class_fk')
 
 
 class Staff(models.Model):
@@ -413,6 +498,21 @@ class Staff(models.Model):
     def __str__(self):
         return self.name
 
+class ExpenseCategory(models.Model):
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="expense_categories", null=True, blank=True)
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+        unique_together = ("tenant", "name")
+
+    def __str__(self):
+        return self.name
+
+
 class Expenses(models.Model):
     tenant = models.ForeignKey(
         Tenant,
@@ -421,13 +521,87 @@ class Expenses(models.Model):
         null=True,
         blank=True
     )
+    expense_number=models.CharField(max_length=30,blank=True)
     name=models.CharField(max_length=200)
+    title=models.CharField(max_length=200,blank=True)
+    category=models.ForeignKey(ExpenseCategory,on_delete=models.SET_NULL,related_name='expenses',null=True,blank=True)
+    subcategory=models.CharField(max_length=120,blank=True)
     amount=models.DecimalField(max_digits=10, decimal_places=2)
-    date=models.DateField(auto_now_add=True)
+    currency=models.CharField(max_length=3,default="AFN")
+    date=models.DateField(default=timezone.localdate)
+    expense_date=models.DateField(default=timezone.localdate)
+    payment_date=models.DateField(null=True,blank=True)
     description=models.TextField(blank=True)
+    notes=models.TextField(blank=True)
+    attachment=models.FileField(upload_to="expense_attachments/",null=True,blank=True)
+    receipt=models.FileField(upload_to="expense_receipts/",null=True,blank=True)
+    created_by=models.ForeignKey(User,on_delete=models.SET_NULL,related_name='created_expenses',null=True,blank=True)
+    approved_by=models.ForeignKey(User,on_delete=models.SET_NULL,related_name='approved_expenses',null=True,blank=True)
+    approval_date=models.DateTimeField(null=True,blank=True)
+    is_archived=models.BooleanField(default=False)
+    created_at=models.DateTimeField(default=timezone.now)
+    updated_at=models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-expense_date", "-created_at"]
+
+    def save(self, *args, **kwargs):
+        if not self.title:
+            self.title = self.name
+        if not self.name:
+            self.name = self.title
+        if not self.expense_number:
+            year = timezone.localdate().year
+            last = Expenses.objects.filter(tenant=self.tenant, expense_number__startswith=f"EXP-{year}-").aggregate(max_id=Max("id"))["max_id"] or 0
+            self.expense_number = f"EXP-{year}-{last + 1:05d}"
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
+
+
+class Budget(models.Model):
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="budgets", null=True, blank=True)
+    name = models.CharField(max_length=160)
+    category = models.ForeignKey(ExpenseCategory, on_delete=models.SET_NULL, related_name="budgets", null=True, blank=True)
+    allocated_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def spent_amount(self):
+        qs = Expenses.objects.filter(tenant=self.tenant, expense_date__range=[self.start_date, self.end_date])
+        if self.category_id:
+            qs = qs.filter(category=self.category)
+        return qs.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+
+    @property
+    def remaining_amount(self):
+        return self.allocated_amount - self.spent_amount
+
+    @property
+    def used_percentage(self):
+        return round((self.spent_amount / self.allocated_amount) * 100, 2) if self.allocated_amount else 0
+
+
+class RecurringExpense(models.Model):
+    class Frequency(models.TextChoices):
+        MONTHLY = "monthly", "Monthly"
+        QUARTERLY = "quarterly", "Quarterly"
+        YEARLY = "yearly", "Yearly"
+
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="recurring_expenses", null=True, blank=True)
+    title = models.CharField(max_length=200)
+    category = models.ForeignKey(ExpenseCategory, on_delete=models.SET_NULL, related_name="recurring_expenses", null=True, blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3, default="AFN")
+    frequency = models.CharField(max_length=20, choices=Frequency.choices, default=Frequency.MONTHLY)
+    next_run_date = models.DateField()
+    is_active = models.BooleanField(default=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
 class ExpenseHistory(models.Model):
     ACTION_CHOICES=[
@@ -663,6 +837,17 @@ class EnrollmentBillingProfile(TenantOwnedModel):
 
     enrollment = models.OneToOneField(Enrollment, on_delete=models.PROTECT, related_name="billing_profile")
     fee_plan = models.ForeignKey(FeePlan, on_delete=models.PROTECT, related_name="billing_profiles")
+    fee_plan_name = models.CharField(max_length=180, blank=True)
+    monthly_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    registration_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    material_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    exam_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    discount_allowed = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    currency = models.CharField(max_length=3, default="USD")
+    billing_cycle = models.CharField(max_length=20, default=FeePlan.BillingCycle.MONTHLY)
+    due_day = models.PositiveSmallIntegerField(default=5)
+    late_fee_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    grace_period_days = models.PositiveSmallIntegerField(default=0)
     discount_type = models.CharField(max_length=20, choices=DiscountType.choices, default=DiscountType.NONE)
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     scholarship = models.CharField(max_length=150, blank=True)
@@ -867,7 +1052,6 @@ class StationeryPurchase(TenantOwnedModel):
         PAID = "paid", "Paid"
         CANCELLED = "cancelled", "Cancelled"
 
-    student = models.ForeignKey(Students, on_delete=models.PROTECT, related_name="stationery_purchases")
     discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     tax = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -879,7 +1063,6 @@ class StationeryPurchase(TenantOwnedModel):
         ordering = ["-date", "-created_at"]
         indexes = [
             models.Index(fields=["tenant", "payment_status"]),
-            models.Index(fields=["student", "date"]),
             models.Index(fields=["receipt_number"]),
         ]
 
@@ -911,6 +1094,7 @@ class Notification(TenantOwnedModel):
         FEE_OVERDUE = "fee_overdue", "Fee Overdue"
         PAYMENT_RECEIVED = "payment_received", "Payment Received"
         INVENTORY_LOW = "inventory_low", "Inventory Low"
+        STATIONERY_SALE = "stationery_sale", "Stationery Sale"
         EXAM_REMINDER = "exam_reminder", "Exam Reminder"
 
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")

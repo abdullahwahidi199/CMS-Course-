@@ -10,13 +10,17 @@ from .enterprise_services import (
     record_payment,
     save_assessment_result,
 )
+from .services.promotion_service import promote_student
 from .models import (
     Assessment,
     Classes,
     Course,
     Enrollment,
+    EnrollmentBillingProfile,
     FeePlan,
     InventoryTransaction,
+    Invoice,
+    PromotionHistory,
     StationeryItem,
     Students,
     Teachers,
@@ -108,6 +112,13 @@ class EnterpriseServiceTests(TestCase):
             due_date=date(2026, 7, 20),
             user=self.admin,
         )
+        repeated = generate_monthly_invoices(
+            tenant=self.tenant,
+            month=7,
+            year=2026,
+            due_date=date(2026, 7, 20),
+            user=self.admin,
+        )
         invoice = invoices[0]
         payment = record_payment(
             invoice=invoice,
@@ -117,10 +128,174 @@ class EnterpriseServiceTests(TestCase):
         )
         invoice.refresh_from_db()
 
+        self.assertEqual(len(repeated), 0)
         self.assertEqual(payment.amount_paid, Decimal("400"))
         self.assertEqual(invoice.paid_amount, Decimal("400"))
-        self.assertEqual(invoice.balance, Decimal("600"))
+        self.assertEqual(invoice.balance, Decimal("700.00"))
         self.assertEqual(invoice.status, "partial")
+
+    def test_new_invoice_does_not_roll_previous_unpaid_balance_into_amount(self):
+        FeePlan.objects.create(
+            tenant=self.tenant,
+            course=self.course,
+            monthly_fee=Decimal("400"),
+            registration_fee=Decimal("0"),
+            material_fee=Decimal("0"),
+            exam_fee=Decimal("0"),
+            currency="USD",
+            created_by=self.admin,
+        )
+
+        july_invoice = generate_monthly_invoices(
+            tenant=self.tenant,
+            month=7,
+            year=2026,
+            due_date=date(2026, 7, 20),
+            user=self.admin,
+        )[0]
+        august_invoice = generate_monthly_invoices(
+            tenant=self.tenant,
+            month=8,
+            year=2026,
+            due_date=date(2026, 8, 20),
+            user=self.admin,
+        )[0]
+
+        self.assertEqual(july_invoice.balance, Decimal("400.00"))
+        self.assertEqual(august_invoice.final_amount, Decimal("400.00"))
+        self.assertEqual(august_invoice.balance, Decimal("400.00"))
+        self.assertEqual(august_invoice.previous_balance, Decimal("0.00"))
+
+    def test_payment_cannot_exceed_invoice_balance(self):
+        FeePlan.objects.create(
+            tenant=self.tenant,
+            course=self.course,
+            monthly_fee=Decimal("400"),
+            currency="USD",
+            created_by=self.admin,
+        )
+        invoice = generate_monthly_invoices(
+            tenant=self.tenant,
+            month=7,
+            year=2026,
+            due_date=date(2026, 7, 20),
+            user=self.admin,
+        )[0]
+
+        with self.assertRaises(ValueError):
+            record_payment(
+                invoice=invoice,
+                amount_paid=Decimal("401"),
+                payment_method="cash",
+                received_by=self.admin,
+            )
+
+    def test_student_promotion_transfers_old_enrollment_and_creates_new_active_enrollment(self):
+        next_batch = Classes.objects.create(
+            tenant=self.tenant,
+            course=self.course,
+            name="Class B",
+            subjects="Math",
+            startDate=date(2026, 1, 1),
+            endDate=date(2026, 12, 31),
+        )
+        FeePlan.objects.create(
+            tenant=self.tenant,
+            course=self.course,
+            monthly_fee=Decimal("1200"),
+            currency="USD",
+            created_by=self.admin,
+        )
+
+        new_enrollment, promotion = promote_student(
+            self.student,
+            next_batch,
+            user=self.admin,
+            remarks="Promoted after completing level 1",
+        )
+        self.enrollment.refresh_from_db()
+
+        self.assertEqual(self.enrollment.status, Enrollment.Status.TRANSFERRED)
+        self.assertEqual(new_enrollment.status, Enrollment.Status.ACTIVE)
+        self.assertEqual(new_enrollment.batch, next_batch)
+        self.assertEqual(
+            Enrollment.objects.filter(student=self.student, status=Enrollment.Status.ACTIVE).count(),
+            1,
+        )
+        self.assertEqual(promotion.old_class, self.batch)
+        self.assertEqual(promotion.new_class, next_batch)
+        self.assertTrue(PromotionHistory.objects.filter(student=self.student).exists())
+        self.assertTrue(EnrollmentBillingProfile.objects.filter(enrollment=new_enrollment).exists())
+        new_invoice = Invoice.objects.get(enrollment=new_enrollment)
+        self.assertEqual(new_invoice.paid_amount, Decimal("0.00"))
+        self.assertEqual(new_invoice.balance, Decimal("1200.00"))
+        self.assertEqual(new_invoice.status, Invoice.Status.PENDING)
+
+    def test_batch_fee_plan_replaces_promoted_student_course_plan_invoice(self):
+        next_batch = Classes.objects.create(
+            tenant=self.tenant,
+            course=self.course,
+            name="Class B",
+            subjects="Math",
+            startDate=date(2026, 1, 1),
+            endDate=date(2026, 12, 31),
+        )
+        FeePlan.objects.create(
+            tenant=self.tenant,
+            course=self.course,
+            monthly_fee=Decimal("1200"),
+            currency="AFN",
+            created_by=self.admin,
+        )
+
+        new_enrollment, _ = promote_student(
+            self.student,
+            next_batch,
+            user=self.admin,
+            remarks="Promoted before batch fee was configured",
+            promotion_date=date(2026, 7, 8),
+        )
+        promoted_invoice = Invoice.objects.get(enrollment=new_enrollment)
+        self.assertEqual(promoted_invoice.balance, Decimal("1200.00"))
+
+        FeePlan.objects.create(
+            tenant=self.tenant,
+            course=self.course,
+            batch=next_batch,
+            monthly_fee=Decimal("600"),
+            currency="AFN",
+            created_by=self.admin,
+        )
+        generated = generate_monthly_invoices(
+            tenant=self.tenant,
+            month=7,
+            year=2026,
+            due_date=date(2026, 7, 20),
+            user=self.admin,
+            batch=next_batch.id,
+        )
+        promoted_invoice.refresh_from_db()
+        new_enrollment.billing_profile.refresh_from_db()
+
+        self.assertEqual(len(generated), 1)
+        self.assertEqual(new_enrollment.billing_profile.monthly_fee, Decimal("600.00"))
+        self.assertEqual(promoted_invoice.final_amount, Decimal("600.00"))
+        self.assertEqual(promoted_invoice.paid_amount, Decimal("0.00"))
+        self.assertEqual(promoted_invoice.balance, Decimal("600.00"))
+
+    def test_student_promotion_to_batch_without_course_carries_current_course(self):
+        batch_without_course = Classes.objects.create(
+            tenant=self.tenant,
+            name="Unassigned Batch",
+            subjects="Math",
+            startDate=date(2026, 1, 1),
+            endDate=date(2026, 12, 31),
+        )
+
+        new_enrollment, _ = promote_student(self.student, batch_without_course, user=self.admin)
+
+        self.assertEqual(new_enrollment.course, self.course)
+        self.assertEqual(new_enrollment.batch, batch_without_course)
 
     def test_stock_out_updates_inventory_status(self):
         item = StationeryItem.objects.create(

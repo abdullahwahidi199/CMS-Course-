@@ -1,397 +1,247 @@
-import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
+import { ClipboardPlus, Save } from "lucide-react";
 import instance from "../../api/axiosInstance";
+import DataTable from "../shared/DataTable";
+import StatCard from "../shared/StatCard";
+import TeacherPageShell from "./pages/TeacherPageShell";
+import { inputClass, statusBadge } from "./pages/teacherUtils.jsx";
+import { formatApiError } from "../../utils/apiErrors";
+
+const today = () => new Date().toISOString().slice(0, 10);
 
 export default function ClassDetails() {
   const { id } = useParams();
-
   const [classDetails, setClassDetails] = useState(null);
   const [assignments, setAssignments] = useState([]);
-
   const [marks, setMarks] = useState({});
-  const [examType, setExamType] = useState("final");
-  const [exam_date, setExamDate] = useState(null);
-  const [assignmentsDisplay, setAssignmetsDisplay] = useState(false);
-  const [assAddFormDisplay, setAssFormDisplay] = useState(false);
-  const [title, setTitle] = useState("");
-  const [discription, setDescription] = useState("");
-  const [dueDate, setDueDate] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [examType, setExamType] = useState("quiz");
+  const [examDate, setExamDate] = useState(today());
+  const [assignmentForm, setAssignmentForm] = useState({
+    title: "",
+    discription: "",
+    due_date: today(),
+    total_marks: 100,
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
-  const handleAddAssignment = async (e) => {
-    e.preventDefault();
-    const payload = {
-      title,
-      discription,
-      due_date: dueDate,
-      class_assigned: Number(id),
-      total_marks: 100,
-    };
-
+  const fetchData = async () => {
+    setLoading(true);
+    setError("");
     try {
-      await instance.post("/assignments/", payload);
-      setTitle("");
-      setDescription("");
-      setDueDate("");
-      fetchAssignments();
-      handleAssAddFormDisplay();
-    } catch (error) {
-      console.log(error);
-      alert("Failed to add assignment.");
-    }
-  };
-
-  const fetchClass = async () => {
-    try {
-      const response = await instance.get(`/classes/${id}/`);
-      setClassDetails(response.data);
-    } catch (error) {
-      console.log(error);
-    }
-  };
-
-  const fetchAssignments = async () => {
-    try {
-      setLoading(true);
-      const response = await instance.get(`/assignments/?class_id=${id}`);
-      setAssignments(response.data);
-    } catch (error) {
-      console.error(error);
+      const [classRes, assignmentRes, marksRes] = await Promise.all([
+        instance.get(`/classes/${id}/`),
+        instance.get("/assignments/", { params: { class_id: id } }),
+        instance.get("/marks/", { params: { class_id: id } }),
+      ]);
+      setClassDetails(classRes.data);
+      setAssignments(Array.isArray(assignmentRes.data) ? assignmentRes.data : assignmentRes.data?.results || []);
+      const nextMarks = {};
+      (Array.isArray(marksRes.data) ? marksRes.data : marksRes.data?.results || []).forEach((mark) => {
+        nextMarks[mark.student] = {
+          id: mark.id,
+          marks_obtained: mark.marks_obtained,
+          status: mark.status,
+          remarks: mark.remarks || "",
+        };
+      });
+      setMarks(nextMarks);
+    } catch (err) {
+      setError(formatApiError(err, "Could not load class details."));
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchMarks = async () => {
-    try {
-      const response = await instance.get(`/marks/?class_id=${id}`);
-      const marksMap = {};
-      response.data.forEach((m) => {
-        marksMap[m.student] = {
-          id: m.id,
-          marks_obtained: m.marks_obtained,
-          status: m.status,
-          remarks: m.remarks,
-        };
-      });
-      setMarks(marksMap);
-    } catch (error) {
-      console.log(error);
-    }
+  useEffect(() => {
+    fetchData();
+  }, [id]);
+
+  const students = classDetails?.student || [];
+  const stats = useMemo(() => {
+    const graded = students.filter((student) => marks[student.id]?.marks_obtained !== undefined && marks[student.id]?.marks_obtained !== "").length;
+    const average = graded ? students.reduce((total, student) => total + Number(marks[student.id]?.marks_obtained || 0), 0) / graded : 0;
+    return { students: students.length, assignments: assignments.length, graded, average };
+  }, [assignments.length, marks, students]);
+
+  const updateMark = (studentId, field, value) => {
+    setMarks((current) => ({ ...current, [studentId]: { ...current[studentId], [field]: value } }));
   };
 
-  useEffect(() => {
-    fetchClass();
-    fetchMarks();
-    fetchAssignments();
-  }, []);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
+  const saveMarks = async (event) => {
+    event.preventDefault();
+    if (!classDetails) return;
+    setSaving(true);
+    setMessage("");
+    setError("");
     try {
-      for (const s of classDetails.student) {
-        const studentMark = marks[s.id];
+      for (const student of students) {
+        const mark = marks[student.id];
+        if (!mark?.marks_obtained && !mark?.id) continue;
         const payload = {
-          student: s.id,
+          student: student.id,
           exam_type: examType,
-          exam_date: exam_date,
-          marks_obtained: Number(studentMark?.marks_obtained || 0),
+          exam_date: examDate,
+          marks_obtained: Number(mark?.marks_obtained || 0),
           total_marks: 100,
-          status: studentMark?.status || "present",
-          remarks: studentMark?.remarks || "",
+          status: mark?.status || "present",
+          remarks: mark?.remarks || "",
           className: classDetails.name,
         };
-
-        if (studentMark?.id) {
-          await instance.put(`/marks/${studentMark.id}/`, payload);
-        } else {
-          const res = await instance.post("/marks/", payload);
-          const newMark = res.data;
-          setMarks((prev) => ({
-            ...prev,
-            [s.id]: { id: newMark.id, marks_obtained: newMark.marks_obtained },
-          }));
-        }
+        if (mark?.id) await instance.patch(`/marks/${mark.id}/`, payload);
+        else await instance.post("/marks/", payload);
       }
-
-      alert("Marks saved successfully!");
-      fetchMarks();
-    } catch (error) {
-      console.log(error);
-      alert("Error saving marks");
+      setMessage("Marks saved.");
+      await fetchData();
+    } catch (err) {
+      setError(formatApiError(err, "Could not save marks."));
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleChange = (studentID, field, value) => {
-    setMarks({
-      ...marks,
-      [studentID]: {
-        ...marks[studentID],
-        [field]: value,
-      },
-    });
+  const createAssignment = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setMessage("");
+    setError("");
+    try {
+      await instance.post("/assignments/", {
+        ...assignmentForm,
+        class_assigned: Number(id),
+        total_marks: Number(assignmentForm.total_marks || 100),
+      });
+      setAssignmentForm({ title: "", discription: "", due_date: today(), total_marks: 100 });
+      setMessage("Assignment created.");
+      await fetchData();
+    } catch (err) {
+      setError(formatApiError(err, "Could not create assignment."));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleAssignmentsDisplay = () => {
-    setAssignmetsDisplay(!assignmentsDisplay);
-  };
-  const handleAssAddFormDisplay = () => {
-    setAssFormDisplay(!assAddFormDisplay);
-  };
+  if (loading) {
+    return (
+      <TeacherPageShell title="Class Details" description="Loading class workspace...">
+        <div className="rounded-xl bg-white p-6 text-sm text-slate-500 shadow-sm">Loading...</div>
+      </TeacherPageShell>
+    );
+  }
 
   return (
-    <div className="p-8 max-w-6xl mx-auto relative">
-      <button
-        onClick={handleAssignmentsDisplay}
-        className="fixed bottom-6 right-6 z-50 px-5 py-3 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-xl hover:opacity-90 transition"
-      >
-        📂 Assignments
-      </button>
+    <TeacherPageShell
+      title={classDetails?.name || "Class Details"}
+      description={`${classDetails?.course_name || "Course"} / ${classDetails?.start_time || "-"} - ${classDetails?.end_time || "-"}`}
+    >
+      {message ? <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{message}</div> : null}
+      {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
 
-      {classDetails ? (
-        <div className="space-y-10">
-          <div className="relative bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white rounded-3xl shadow-2xl p-10 overflow-hidden">
-            <div className="absolute inset-0 bg-black/20 rounded-3xl backdrop-blur-md"></div>
-            <div className="relative z-10">
-              <h2 className="text-4xl font-extrabold tracking-tight mb-2">
-                {classDetails.name}
-              </h2>
-              <p className="text-lg font-medium opacity-90">
-                Room{" "}
-                {classDetails.roomOfClass_details &&
-                  classDetails.roomOfClass_details.name}{" "}
-                • {classDetails.startDate} → {classDetails.endDate}
-              </p>
-              <p className="mt-2 text-sm font-light opacity-80">
-                {classDetails.start_time} – {classDetails.end_time}
-              </p>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="Students" value={stats.students} accent="border-cyan-600" />
+        <StatCard title="Assignments" value={stats.assignments} accent="border-violet-500" />
+        <StatCard title="Marked Students" value={stats.graded} accent="border-emerald-500" />
+        <StatCard title="Average Marks" value={stats.average.toFixed(1)} accent="border-amber-500" />
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[1.4fr_0.9fr]">
+        <form onSubmit={saveMarks} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h3 className="font-semibold text-slate-950">Marks Entry</h3>
+              <p className="text-sm text-slate-500">Enter or update marks for this class.</p>
             </div>
-          </div>
-
-          <div className="bg-white/80 backdrop-blur-xl shadow-xl rounded-2xl p-8 border border-gray-100">
-            <h3 className="text-xl font-bold text-gray-900 mb-6">
-              📊 Class Overview
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[
-                { label: "Name", value: classDetails.name },
-                {
-                  label: "Room",
-                  value:
-                    classDetails.roomOfClass_details &&
-                    classDetails.roomOfClass_details.name,
-                },
-                { label: "Start Date", value: classDetails.startDate },
-                { label: "End Date", value: classDetails.endDate },
-                { label: "Start Time", value: classDetails.start_time },
-                { label: "End Time", value: classDetails.end_time },
-              ].map((item, idx) => (
-                <div
-                  key={idx}
-                  className="flex flex-col bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-5 shadow-sm hover:shadow-md transition"
-                >
-                  <span className="text-xs uppercase tracking-wide text-gray-500 font-medium">
-                    {item.label}
-                  </span>
-                  <span className="mt-1 text-lg font-semibold text-gray-900">
-                    {item.value}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <form
-            onSubmit={handleSubmit}
-            className="bg-white/80 backdrop-blur-xl shadow-2xl rounded-3xl border border-gray-100 p-8"
-          >
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-              <h3 className="text-2xl font-bold text-gray-900 tracking-tight">
-                Enter / Update Marks
-              </h3>
-              <input
-                type="date"
-                value={exam_date || ""}
-                onChange={(e) => setExamDate(e.target.value)}
-              />
-              <select
-                value={examType}
-                onChange={(e) => setExamType(e.target.value)}
-                className="border border-gray-300 rounded-xl px-4 py-2 bg-white shadow-sm text-gray-700 text-sm focus:ring-2 focus:ring-indigo-400"
-              >
-                <option value="final">Final</option>
-                <option value="midterm">Midterm</option>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <input type="date" className={inputClass()} value={examDate} onChange={(event) => setExamDate(event.target.value)} />
+              <select className={inputClass()} value={examType} onChange={(event) => setExamType(event.target.value)}>
                 <option value="quiz">Quiz</option>
+                <option value="midterm">Midterm</option>
+                <option value="final">Final</option>
               </select>
             </div>
-
-            <div className="overflow-x-auto rounded-2xl border border-gray-200 shadow-inner">
-              <table className="w-full border-collapse text-left text-sm">
-                <thead className="bg-gradient-to-r from-indigo-50 to-purple-50 text-gray-700">
-                  <tr>
-                    <th className="p-3 border">Student</th>
-                    <th className="p-3 border">Status</th>
-                    <th className="p-3 border">Marks</th>
-                    <th className="p-3 border">Remarks</th>
+          </div>
+          <div className="max-h-[32rem] overflow-auto rounded-xl border border-slate-100">
+            <table className="min-w-full divide-y divide-slate-100 text-sm">
+              <thead className="sticky top-0 bg-slate-50">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold text-slate-600">Student</th>
+                  <th className="px-3 py-2 text-left font-semibold text-slate-600">Status</th>
+                  <th className="px-3 py-2 text-left font-semibold text-slate-600">Marks</th>
+                  <th className="px-3 py-2 text-left font-semibold text-slate-600">Remarks</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {students.map((student) => (
+                  <tr key={student.id}>
+                    <td className="px-3 py-2 font-medium text-slate-800">{student.name}</td>
+                    <td className="px-3 py-2">
+                      <select className={inputClass()} value={marks[student.id]?.status || "present"} onChange={(event) => updateMark(student.id, "status", event.target.value)}>
+                        <option value="present">Present</option>
+                        <option value="absent">Absent</option>
+                        <option value="excused">Excused</option>
+                      </select>
+                    </td>
+                    <td className="px-3 py-2">
+                      <input type="number" min="0" max="100" className={inputClass()} value={marks[student.id]?.marks_obtained || ""} onChange={(event) => updateMark(student.id, "marks_obtained", event.target.value)} />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input className={inputClass()} value={marks[student.id]?.remarks || ""} onChange={(event) => updateMark(student.id, "remarks", event.target.value)} />
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {classDetails.student.map((s) => (
-                    <tr key={s.id} className="hover:bg-gray-50">
-                      <td className="p-3 border">{s.name}</td>
-                      <td className="p-3 border">
-                        <select
-                          value={marks[s.id]?.status || "present"}
-                          onChange={(e) =>
-                            handleChange(s.id, "status", e.target.value)
-                          }
-                          className="border rounded px-2 py-1"
-                        >
-                          <option value="present">Present</option>
-                          <option value="absent">Absent</option>
-                          <option value="excused">Excused</option>
-                        </select>
-                      </td>
-                      <td className="p-4 border text-center">
-                        <input
-                          type="number"
-                          value={marks[s.id]?.marks_obtained || ""}
-                          onChange={(e) =>
-                            handleChange(s.id, "marks_obtained", e.target.value)
-                          }
-                          className="w-28 border border-gray-300 rounded-xl px-3 py-2 shadow-sm text-center focus:ring-2 focus:ring-indigo-400"
-                          min="0"
-                          max="100"
-                        />
-                      </td>
-                      <td className="p-3 border">
-                        <input
-                          value={marks[s.id]?.remarks || ""}
-                          onChange={(e) =>
-                            handleChange(s.id, "remarks", e.target.value)
-                          }
-                          className="w-full border rounded-lg px-2 py-1"
-                          placeholder="Optional"
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <button disabled={saving} className="mt-4 inline-flex items-center gap-2 rounded-md bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+            <Save size={16} /> Save Marks
+          </button>
+        </form>
 
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                className="mt-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-8 py-3 rounded-xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition"
-              >
-                Save Marks
+        <section className="space-y-5">
+          <form onSubmit={createAssignment} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <h3 className="mb-3 font-semibold text-slate-950">Create Assignment</h3>
+            <div className="space-y-3">
+              <input required className={inputClass()} placeholder="Title" value={assignmentForm.title} onChange={(event) => setAssignmentForm({ ...assignmentForm, title: event.target.value })} />
+              <textarea required className={inputClass()} rows={3} placeholder="Description" value={assignmentForm.discription} onChange={(event) => setAssignmentForm({ ...assignmentForm, discription: event.target.value })} />
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input required type="date" className={inputClass()} value={assignmentForm.due_date} onChange={(event) => setAssignmentForm({ ...assignmentForm, due_date: event.target.value })} />
+                <input required type="number" min="1" className={inputClass()} value={assignmentForm.total_marks} onChange={(event) => setAssignmentForm({ ...assignmentForm, total_marks: event.target.value })} />
+              </div>
+              <button disabled={saving} className="inline-flex items-center gap-2 rounded-md bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+                <ClipboardPlus size={16} /> Create
               </button>
             </div>
           </form>
-        </div>
-      ) : (
-        <h2 className="text-center text-red-600 font-semibold text-xl">
-          ❌ Error! Could not get the class
-        </h2>
-      )}
 
-      <div
-        className={`fixed top-0 right-0 h-full w-full sm:w-96 bg-white shadow-2xl border-l border-gray-200 transform transition-transform duration-300 z-50 ${
-          assignmentsDisplay ? "translate-x-0" : "translate-x-full"
-        }`}
-      >
-        <div className="p-6 flex flex-col h-full">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">
-              📂 Assignments
-            </h3>
-            <button
-              onClick={handleAssignmentsDisplay}
-              className="px-3 py-1 rounded-md bg-gray-200 hover:bg-gray-300 transition"
-            >
-              ✕
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto space-y-3">
-            {loading ? (
-              <p className="text-gray-500">Loading...</p>
-            ) : assignments.length === 0 ? (
-              <p className="text-gray-500">No Assignments yet!</p>
-            ) : (
-              assignments.map((a) => (
-                <div
-                  key={a.id}
-                  className="p-3 bg-gray-50 rounded-xl shadow-sm  cursor-pointer hover:bg-gray-300"
-                >
-                  <Link
-                    to={`/teacher/dashboard/assignment/${a.id}`}
-                    className="flex flex-col"
-                  >
-                    <span className="font-medium text-gray-800">{a.title}</span>
-                    <span className="text-sm text-gray-500">
-                      Click to view Submissions
-                    </span>
-                  </Link>
-                </div>
-              ))
-            )}
-          </div>
-
-          <button
-            onClick={handleAssAddFormDisplay}
-            className="mt-4 w-full py-2 rounded-xl bg-indigo-500 text-white hover:bg-indigo-600 transition"
-          >
-            ➕ Add Assignment
-          </button>
-
-          {assAddFormDisplay && (
-            <form onSubmit={handleAddAssignment} className="mt-4 space-y-4">
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-                placeholder="Title"
-                className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-400"
-              />
-              <textarea
-                placeholder="Description"
-                value={discription}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-400"
-                rows="3"
-                required
-              />
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-400"
-                required
-              />
-
-              <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={handleAssAddFormDisplay}
-                  className="px-4 py-2 rounded-lg border text-gray-600 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow hover:opacity-90 transition"
-                >
-                  Add Assignment
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
+          <DataTable
+            title="Assignments"
+            rows={assignments}
+            pageSize={5}
+            columns={[
+              { key: "title", label: "Title" },
+              { key: "due_date", label: "Due" },
+              { key: "total_marks", label: "Marks" },
+              { key: "status", label: "Status", accessor: (row) => (new Date(row.due_date) < new Date() ? "closed" : "active"), render: (row) => statusBadge(new Date(row.due_date) < new Date() ? "closed" : "active") },
+            ]}
+            actions={(row) => [{ label: "Open", onClick: () => { window.location.href = `/teacher/dashboard/assignment/${row.id}`; } }]}
+          />
+        </section>
       </div>
-    </div>
+
+      <DataTable
+        title="Student Roster"
+        rows={students}
+        pageSize={10}
+        columns={[
+          { key: "name", label: "Student" },
+          { key: "role_number", label: "Roll No" },
+          { key: "parent_mobile_number", label: "Parent Mobile" },
+          { key: "address", label: "Address" },
+        ]}
+      />
+    </TeacherPageShell>
   );
 }

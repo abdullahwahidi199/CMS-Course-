@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import serializers
 
@@ -28,6 +29,14 @@ def validate_unique_user_identity(*, username, email=None, user_id=None):
         raise serializers.ValidationError({"email": "This email is already used by another user."})
 
 
+def validate_account_password(password, user):
+    try:
+        validate_password(password, user)
+    except DjangoValidationError as exc:
+        messages = list(exc.messages)
+        raise serializers.ValidationError({"password": messages or ["Password does not meet the requirements."]})
+
+
 @transaction.atomic
 def create_user_account(*, tenant, username, password, role, email="", first_name="", last_name="", phone=""):
     if not username:
@@ -45,7 +54,7 @@ def create_user_account(*, tenant, username, password, role, email="", first_nam
         phone=phone or "",
         role=role,
     )
-    validate_password(password, user)
+    validate_account_password(password, user)
     user.set_password(password)
     user.save()
     return user
@@ -71,7 +80,7 @@ def update_user_account(user, *, username=None, email=None, first_name=None, las
         user.is_active = bool(is_active)
         user.is_deactivated = not bool(is_active)
     if password:
-        validate_password(password, user)
+        validate_account_password(password, user)
         user.set_password(password)
     user.save()
     return user

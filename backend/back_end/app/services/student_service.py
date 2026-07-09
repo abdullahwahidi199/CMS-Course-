@@ -1,22 +1,43 @@
 from django.db import transaction
+from django.utils.crypto import get_random_string
 
 from app.models import Students
 from app.services.user_service import create_user_account, get_required_role, update_user_account
 
 
 @transaction.atomic
-def create_student(*, tenant, username, password, first_name, last_name, email="", phone="", f_name="", role_number="", parent_mobile_number="", address="", total_fee=0, amount_paid=0):
-    role = get_required_role(tenant=tenant, slug="student")
-    user = create_user_account(
-        tenant=tenant,
-        username=username,
-        password=password,
-        role=role,
-        email=email,
-        first_name=first_name,
-        last_name=last_name,
-        phone=phone or parent_mobile_number,
-    )
+def create_student(*, tenant, username=None, password=None, first_name="", last_name="", email="", phone="", f_name="", role_number="", parent_mobile_number="", address="", create_user=True):
+    user = None
+    if create_user:
+        if not username or not password:
+            raise ValueError("Username and password are required when creating a student user account.")
+        role = get_required_role(tenant=tenant, slug="student")
+        user = create_user_account(
+            tenant=tenant,
+            username=username,
+            password=password,
+            role=role,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            phone=phone or parent_mobile_number,
+        )
+    else:
+        role = None
+
+    if user is None:
+        role = get_required_role(tenant=tenant, slug="student")
+        generated_username = username or f"student-{tenant.id or 0}-{Students.objects.filter(tenant=tenant).count() + 1}"
+        user = create_user_account(
+            tenant=tenant,
+            username=generated_username,
+            password=password or get_random_string(16),
+            role=role,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            phone=phone or parent_mobile_number,
+        )
     return Students.objects.create(
         tenant=tenant,
         user=user,
@@ -25,8 +46,6 @@ def create_student(*, tenant, username, password, first_name, last_name, email="
         role_number=role_number,
         parent_mobile_number=parent_mobile_number or phone,
         address=address,
-        total_fee=total_fee or 0,
-        amount_paid=amount_paid or 0,
     )
 
 
@@ -48,7 +67,7 @@ def update_student(student, *, first_name=None, last_name=None, email=None, phon
     )
     if first_name is not None or last_name is not None:
         student.name = f"{first_name or ''} {last_name or ''}".strip()
-    for field in ["f_name", "role_number", "parent_mobile_number", "address", "total_fee", "amount_paid"]:
+    for field in ["f_name", "role_number", "parent_mobile_number", "address"]:
         if field in profile:
             setattr(student, field, profile[field])
     if is_active is not None:

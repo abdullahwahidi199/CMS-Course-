@@ -1,14 +1,25 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Pencil, Trash2, Save, XCircle } from "lucide-react";
+import { ArrowUpCircle, Pencil, Trash2, Save, XCircle } from "lucide-react";
 import instance from "../api/axiosInstance";
+
+const today = () => new Date().toISOString().slice(0, 10);
 
 function IndividaulStudent() {
   const { id } = useParams();
   const [student, setStudent] = useState(null);
+  const [classes, setClasses] = useState([]);
   const navigate = useNavigate();
   const [editFormDisplay, setEditFormDisplay] = useState(false);
   const [editFeeDisplay, setEditFeeDisplay] = useState(false);
+  const [promotionDisplay, setPromotionDisplay] = useState(false);
+  const [promotionForm, setPromotionForm] = useState({
+    new_batch: "",
+    promotion_date: today(),
+    remarks: "",
+  });
+  const [message, setMessage] = useState("");
+  const [promotionError, setPromotionError] = useState("");
   const [payment, setPayment] = useState("");
 
   const fetchStudent = async () => {
@@ -20,8 +31,18 @@ function IndividaulStudent() {
     }
   };
 
+  const fetchClasses = async () => {
+    try {
+      const response = await instance.get("/classes/");
+      setClasses(response.data);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   useEffect(() => {
     fetchStudent();
+    fetchClasses();
   }, [id]);
 
   const handleDelete = async () => {
@@ -75,8 +96,45 @@ function IndividaulStudent() {
     setEditFeeDisplay(!editFeeDisplay);
   };
 
+  const currentEnrollment = student?.current_enrollments?.[0];
+  const availableClasses = classes.filter(
+    (item) => item.is_active !== false && String(item.id) !== String(currentEnrollment?.batch),
+  );
+
+  const handlePromote = async () => {
+    setPromotionError("");
+    setMessage("");
+    if (!promotionForm.new_batch) {
+      setPromotionError("Select the new class.");
+      return;
+    }
+    try {
+      await instance.post("/promotions/", {
+        student: Number(id),
+        new_batch: promotionForm.new_batch,
+        promotion_date: promotionForm.promotion_date,
+        remarks: promotionForm.remarks,
+      });
+      setMessage("Student promoted successfully.");
+      setPromotionDisplay(false);
+      setPromotionForm({ new_batch: "", promotion_date: today(), remarks: "" });
+      await fetchStudent();
+    } catch (error) {
+      setPromotionError(
+        error.response?.data?.detail
+          ? JSON.stringify(error.response.data.detail)
+          : "Could not promote student.",
+      );
+    }
+  };
+
   return (
     <div className="p-6 sm:p-10 space-y-12 bg-gradient-to-b from-gray-50 to-gray-100 min-h-screen">
+      {message && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+          {message}
+        </div>
+      )}
       {student ? (
         <div>
           <div className="text-red-700 cursor-pointer mb-[20px]">
@@ -144,13 +202,22 @@ function IndividaulStudent() {
                 >
                   <Pencil size={16} /> Edit
                 </button>
+                <button
+                  onClick={() => setPromotionDisplay(true)}
+                  className="mt-6 inline-flex items-center gap-2 bg-cyan-700 hover:bg-cyan-800 text-white px-4 py-2 rounded shadow"
+                >
+                  <ArrowUpCircle size={16} /> Promote Student
+                </button>
               </div>
             </div>
 
             <div className="space-y-3 text-gray-800 text-sm md:text-base mt-6 md:mt-0 text-left ">
               <p>{student.name}</p>
               <p>{student.f_name}</p>
-              <p>{student.current_enrollments?.[0]?.batch_name || "No active batch"}</p>
+              <p>
+                {student.current_enrollments?.[0]?.batch_name ||
+                  "No active batch"}
+              </p>
               <p>{student.role_number}</p>
               <p>{student.parent_mobile_number}</p>
               <p>{student.address}</p>
@@ -247,6 +314,115 @@ function IndividaulStudent() {
                 className="inline-flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white px-5 py-2 rounded shadow"
               >
                 <XCircle size={16} /> Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {student && promotionDisplay && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4">
+          <div className="w-full max-w-xl rounded-lg border border-gray-200 bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Promote Student
+              </h2>
+              <button
+                onClick={() => setPromotionDisplay(false)}
+                className="rounded-md p-1 text-gray-500 hover:bg-gray-100"
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            {promotionError && (
+              <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                {promotionError}
+              </div>
+            )}
+
+            <div className="grid gap-4">
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium text-gray-700">
+                  Current Class
+                </span>
+                <input
+                  readOnly
+                  value={currentEnrollment?.batch_name || "No active class"}
+                  className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700"
+                />
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium text-gray-700">
+                  New Class
+                </span>
+                <select
+                  value={promotionForm.new_batch}
+                  onChange={(event) =>
+                    setPromotionForm({
+                      ...promotionForm,
+                      new_batch: event.target.value,
+                    })
+                  }
+                  className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cyan-600"
+                >
+                  <option value="">Select class</option>
+                  {availableClasses.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.course_name || currentEnrollment?.course_name || "Course"} / {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium text-gray-700">
+                  Promotion Date
+                </span>
+                <input
+                  type="date"
+                  value={promotionForm.promotion_date}
+                  onChange={(event) =>
+                    setPromotionForm({
+                      ...promotionForm,
+                      promotion_date: event.target.value,
+                    })
+                  }
+                  className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cyan-600"
+                />
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium text-gray-700">
+                  Remarks
+                </span>
+                <textarea
+                  value={promotionForm.remarks}
+                  onChange={(event) =>
+                    setPromotionForm({
+                      ...promotionForm,
+                      remarks: event.target.value,
+                    })
+                  }
+                  rows={3}
+                  className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cyan-600"
+                />
+              </label>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setPromotionDisplay(false)}
+                className="rounded-md border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePromote}
+                className="inline-flex items-center gap-2 rounded-md bg-cyan-700 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-800"
+              >
+                <ArrowUpCircle size={16} /> Promote Student
               </button>
             </div>
           </div>

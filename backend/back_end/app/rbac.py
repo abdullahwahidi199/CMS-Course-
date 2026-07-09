@@ -5,15 +5,18 @@ from django.utils.text import slugify
 
 from .models import RBACPermission, Role
 
+FIXED_ROLE_SLUGS = {"super-admin", "super_admin", "student"}
 
 MODULE_ACTIONS = {
     "dashboard": ["view", "manage"],
     "students": ["view", "create", "update", "delete", "export", "print", "manage"],
-    "attendance": ["view", "create", "update", "delete", "export", "manage"],
+    "attendance": ["view", "create", "update", "delete", "export", "manage", "mark", "edit", "approve", "reports"],
     "teachers": ["view", "create", "update", "delete", "export", "manage"],
     "staff": ["view", "create", "update", "delete", "manage"],
-    "classes": ["view", "create", "update", "delete", "manage"],
+    "courses": ["view", "create", "update", "delete", "manage"],
+    "batches": ["view", "create", "update", "delete", "manage"],
     "fees": ["view", "create", "update", "delete", "collect_payment", "refund", "export", "print", "manage"],
+    "expenses": ["view", "create", "update", "delete", "manage_categories", "reports", "manage"],
     "assessments": ["view", "create", "update", "delete", "publish", "grade", "export", "print", "manage"],
     "stationery": ["view", "create", "update", "delete", "stock_in", "stock_out", "sell", "export", "print", "manage"],
     "inventory": ["view", "adjust", "stock_in", "stock_out", "export", "manage"],
@@ -33,7 +36,9 @@ SYSTEM_ROLE_PERMISSIONS = {
         "attendance.view",
         "attendance.create",
         "attendance.update",
-        "classes.view",
+        "attendance.mark",
+        "courses.view",
+        "batches.view",
         "assessments.view",
         "assessments.create",
         "assessments.update",
@@ -53,6 +58,37 @@ SYSTEM_ROLE_PERMISSIONS = {
     ],
 }
 
+STUDENT_PERMISSION_CODES = set(SYSTEM_ROLE_PERMISSIONS["student"])
+
+
+def normalized_role_slug(role_or_slug):
+    slug = getattr(role_or_slug, "slug", role_or_slug) or ""
+    return str(slug).lower().replace("_", "-")
+
+
+def is_super_admin_slug(role_or_slug):
+    return normalized_role_slug(role_or_slug) == "super-admin"
+
+
+def is_student_slug(role_or_slug):
+    return normalized_role_slug(role_or_slug) == "student"
+
+
+def is_fixed_permission_role(role_or_slug):
+    return is_super_admin_slug(role_or_slug) or is_student_slug(role_or_slug)
+
+
+def expand_legacy_classes_codes(codes):
+    expanded = set()
+    for code in codes:
+        if code.startswith("classes."):
+            action = code.split(".", 1)[1]
+            expanded.add(f"courses.{action}")
+            expanded.add(f"batches.{action}")
+        else:
+            expanded.add(code)
+    return {code for code in expanded if not code.startswith("classes.")}
+
 MENU_DEFINITIONS = [
     {"label": "Home", "path": "/admin/dashboard", "permission": "dashboard.view"},
     {"label": "Operations", "path": "operations", "permission": "dashboard.view"},
@@ -64,14 +100,15 @@ MENU_DEFINITIONS = [
     {"label": "Reports", "path": "reports", "permission": "reports.view"},
     {"label": "Notifications", "path": "notifications", "permission": "notifications.view"},
     {"label": "Admission", "path": "addmission", "permission": "students.create"},
-    {"label": "Classes", "path": "classes", "permission": "classes.view"},
+    {"label": "Courses", "path": "courses", "permission": "courses.view"},
+    {"label": "Batches", "path": "classes", "permission": "batches.view"},
     {"label": "Attendance", "path": "attendence", "permission": "attendance.view"},
     {"label": "Teachers", "path": "teachers", "permission": "teachers.view"},
     {"label": "Staff", "path": "staff", "permission": "staff.view"},
     {"label": "Settings", "path": "settings", "permission": "settings.view"},
-    {"label": "Expenses", "path": "expenses", "permission": "fees.view"},
-    {"label": "Timetable", "path": "school/timetable", "permission": "classes.view"},
-    {"label": "Rooms", "path": "rooms", "permission": "classes.manage"},
+    {"label": "Expenses", "path": "expenses", "permission": "expenses.view"},
+    {"label": "Timetable", "path": "school/timetable", "permission": "batches.view"},
+    {"label": "Rooms", "path": "rooms", "permission": "batches.manage"},
 ]
 
 
@@ -79,8 +116,35 @@ def permission_code(module, action):
     return f"{module}.{action}".lower().replace(" ", "_")
 
 
+def expected_permission_codes():
+    return {permission_code(module, action) for module, actions in MODULE_ACTIONS.items() for action in actions}
+
+
+def permissions_are_seeded():
+    existing = set(RBACPermission.objects.filter(code__in=expected_permission_codes()).values_list("code", flat=True))
+    return expected_permission_codes().issubset(existing)
+
+
+def migrate_legacy_classes_permissions(permissions, tenant=None):
+    legacy_permissions = RBACPermission.objects.filter(module="classes", is_active=True)
+    if not legacy_permissions.exists():
+        return
+    roles = Role.objects.filter(permissions__in=legacy_permissions).distinct()
+    if tenant is not None:
+        roles = roles.filter(tenant=tenant)
+    for role in roles:
+        additions = []
+        for legacy in legacy_permissions.filter(roles=role):
+            for module in ["courses", "batches"]:
+                replacement = permissions.get(permission_code(module, legacy.action))
+                if replacement:
+                    additions.append(replacement)
+        if additions:
+            role.permissions.add(*additions)
+
+
 @transaction.atomic
-def seed_permissions_and_roles(tenant=None, user=None):
+def seed_permissions_and_roles(tenant=None, user=None, migrate_legacy=True):
     permissions = {}
     for module, actions in MODULE_ACTIONS.items():
         for action in actions:
@@ -94,6 +158,9 @@ def seed_permissions_and_roles(tenant=None, user=None):
                 },
             )
             permissions[code] = permission
+
+    if migrate_legacy:
+        migrate_legacy_classes_permissions(permissions, tenant)
 
     for role_name, codes in SYSTEM_ROLE_PERMISSIONS.items():
         role, _ = Role.objects.get_or_create(
@@ -112,6 +179,15 @@ def seed_permissions_and_roles(tenant=None, user=None):
     return permissions
 
 
+def seed_missing_permissions(tenant=None, user=None):
+    if permissions_are_seeded():
+        return {
+            permission.code: permission
+            for permission in RBACPermission.objects.filter(code__in=expected_permission_codes())
+        }
+    return seed_permissions_and_roles(tenant, user, migrate_legacy=False)
+
+
 def ensure_user_role(user):
     if not user or not user.is_authenticated:
         return None
@@ -124,17 +200,19 @@ def effective_permission_codes(user):
     if not user or not user.is_authenticated or user.is_deactivated or not user.is_active:
         return set()
     if user.is_super_admin:
-        seed_permissions_and_roles(None, user)
-        return set(RBACPermission.objects.filter(is_active=True).values_list("code", flat=True))
+        seed_missing_permissions(None, user)
+        return set(RBACPermission.objects.filter(is_active=True).exclude(module="classes").values_list("code", flat=True))
     role = ensure_user_role(user)
     if not role:
         return set()
-    return set(role.permissions.filter(is_active=True).values_list("code", flat=True))
+    if is_student_slug(role):
+        return set(STUDENT_PERMISSION_CODES)
+    return expand_legacy_classes_codes(role.permissions.filter(is_active=True).values_list("code", flat=True))
 
 
 def grouped_permissions():
     grouped = defaultdict(list)
-    for permission in RBACPermission.objects.filter(is_active=True).order_by("module", "action"):
+    for permission in RBACPermission.objects.filter(is_active=True).exclude(module="classes").order_by("module", "action"):
         grouped[permission.module].append({
             "id": permission.id,
             "code": permission.code,

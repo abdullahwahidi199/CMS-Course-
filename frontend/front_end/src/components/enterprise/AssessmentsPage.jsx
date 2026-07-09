@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { FileDown, FileUp, Save, Send } from "lucide-react";
+import { FileDown, FileUp, Save, Send, SlidersHorizontal, X } from "lucide-react";
 import DataTable from "../shared/DataTable";
 import PageHeader from "../shared/PageHeader";
 import StatCard from "../shared/StatCard";
@@ -34,10 +34,31 @@ function inputClass() {
   return "w-full rounded-md border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cyan-600";
 }
 
+function compactParams(params) {
+  return Object.fromEntries(Object.entries(params).filter(([, value]) => value !== ""));
+}
+
 export default function AssessmentsPage() {
-  const assessments = useApiResource("/v1/assessments/");
+  const [serverFilters, setServerFilters] = useState({
+    course: "",
+    batch: "",
+    teacher: "",
+    assessment_type: "",
+    status: "",
+    date_from: "",
+    date_to: "",
+  });
+  const assessmentParams = useMemo(() => compactParams(serverFilters), [serverFilters]);
+  const assessments = useApiResource("/v1/assessments/", { params: assessmentParams });
+  const courses = useApiResource("/courses/");
   const classes = useApiResource("/classes/");
   const teachers = useApiResource("/teachers/");
+  const [assessmentSearch, setAssessmentSearch] = useState("");
+  const [resultSearch, setResultSearch] = useState("");
+  const [entrySearch, setEntrySearch] = useState("");
+  const [resultStatus, setResultStatus] = useState("");
+  const [gradeFilter, setGradeFilter] = useState("");
+  const [minPercentage, setMinPercentage] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [selectedAssessment, setSelectedAssessment] = useState(null);
@@ -51,6 +72,24 @@ export default function AssessmentsPage() {
     () => assessments.results.find((item) => item.id === selectedAssessment?.id) || selectedAssessment,
     [assessments.results, selectedAssessment],
   );
+
+  const filteredAssessments = useMemo(() => {
+    const normalized = assessmentSearch.trim().toLowerCase();
+    if (!normalized) return assessments.results;
+    return assessments.results.filter((item) => {
+      const text = [
+        item.title,
+        item.description,
+        item.course_name,
+        item.batch_name,
+        item.teacher_name,
+        item.assessment_type,
+        item.status,
+        ...(item.results || []).flatMap((result) => [result.student_name, result.grade, result.marks_obtained, result.percentage]),
+      ].join(" ").toLowerCase();
+      return text.includes(normalized);
+    });
+  }, [assessmentSearch, assessments.results]);
 
   useEffect(() => {
     async function loadStudents() {
@@ -74,13 +113,13 @@ export default function AssessmentsPage() {
   }, [activeAssessment]);
 
   const stats = useMemo(() => {
-    const published = assessments.results.filter((item) => item.status === "published").length;
-    const pending = assessments.results.filter((item) => ["draft", "scheduled"].includes(item.status)).length;
-    const graded = assessments.results.reduce((total, item) => total + (item.results?.length || 0), 0);
-    const percentages = assessments.results.flatMap((item) => item.results?.map((result) => Number(result.percentage || 0)) || []);
+    const published = filteredAssessments.filter((item) => item.status === "published").length;
+    const pending = filteredAssessments.filter((item) => ["draft", "scheduled"].includes(item.status)).length;
+    const graded = filteredAssessments.reduce((total, item) => total + (item.results?.length || 0), 0);
+    const percentages = filteredAssessments.flatMap((item) => item.results?.map((result) => Number(result.percentage || 0)) || []);
     const average = percentages.length ? percentages.reduce((total, value) => total + value, 0) / percentages.length : 0;
     return { published, pending, graded, average };
-  }, [assessments.results]);
+  }, [filteredAssessments]);
 
   const setValue = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
@@ -176,10 +215,26 @@ export default function AssessmentsPage() {
     reader.readAsText(file);
   };
 
+  const studentsForEntry = useMemo(() => {
+    const normalized = entrySearch.trim().toLowerCase();
+    if (!normalized) return students;
+    return students.filter((student) => [student.name, student.role_number, student.student_number].join(" ").toLowerCase().includes(normalized));
+  }, [entrySearch, students]);
+
   const resultRows = useMemo(() => {
     const rows = activeAssessment?.results || [];
-    return [...rows].sort((a, b) => Number(b.percentage) - Number(a.percentage)).map((row, index) => ({ ...row, rank: index + 1 }));
-  }, [activeAssessment]);
+    const normalized = resultSearch.trim().toLowerCase();
+    const visible = rows.filter((row) => {
+      const matchesSearch = normalized
+        ? [row.student_name, row.grade, row.marks_obtained, row.percentage, row.remarks].join(" ").toLowerCase().includes(normalized)
+        : true;
+      const matchesStatus = resultStatus === "" || (resultStatus === "passed" ? row.is_passed : !row.is_passed);
+      const matchesGrade = !gradeFilter || String(row.grade || "").toLowerCase() === gradeFilter.toLowerCase();
+      const matchesMinimum = minPercentage === "" || Number(row.percentage || 0) >= Number(minPercentage);
+      return matchesSearch && matchesStatus && matchesGrade && matchesMinimum;
+    });
+    return [...visible].sort((a, b) => Number(b.percentage) - Number(a.percentage)).map((row, index) => ({ ...row, rank: index + 1 }));
+  }, [activeAssessment, gradeFilter, minPercentage, resultSearch, resultStatus]);
 
   const columns = [
     { key: "title", label: "Title" },
@@ -189,6 +244,16 @@ export default function AssessmentsPage() {
     { key: "assessment_date", label: "Date" },
     { key: "status", label: "Status" },
     { key: "maximum_marks", label: "Max" },
+    { key: "results_count", label: "Marked", accessor: (row) => row.results?.length || 0 },
+    {
+      key: "average",
+      label: "Average",
+      accessor: (row) => {
+        const percentages = row.results?.map((result) => Number(result.percentage || 0)) || [];
+        if (!percentages.length) return "-";
+        return `${(percentages.reduce((total, value) => total + value, 0) / percentages.length).toFixed(1)}%`;
+      },
+    },
   ];
 
   const resultColumns = [
@@ -212,6 +277,79 @@ export default function AssessmentsPage() {
         <StatCard title="Saved Results" value={stats.graded} accent="border-cyan-600" />
         <StatCard title="Average Score" value={`${stats.average.toFixed(1)}%`} accent="border-violet-500" />
       </div>
+
+      <section className="rounded-md bg-white p-4 shadow-sm">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="inline-flex items-center gap-2 text-sm font-semibold text-gray-900">
+              <SlidersHorizontal size={16} /> Assessment Filters
+            </h3>
+            <p className="text-xs text-gray-500">Course, batch, teacher, type, status, and date range are loaded from the server. Text search is instant.</p>
+          </div>
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700"
+            onClick={() => {
+              setServerFilters({ course: "", batch: "", teacher: "", assessment_type: "", status: "", date_from: "", date_to: "" });
+              setAssessmentSearch("");
+            }}
+          >
+            <X size={16} /> Clear
+          </button>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Field label="Instant search">
+            <input
+              className={inputClass()}
+              value={assessmentSearch}
+              onChange={(event) => setAssessmentSearch(event.target.value)}
+              placeholder="Title, teacher, student, grade..."
+            />
+          </Field>
+          <Field label="Course">
+            <select
+              className={inputClass()}
+              value={serverFilters.course}
+              onChange={(event) => setServerFilters((current) => ({ ...current, course: event.target.value, batch: "" }))}
+            >
+              <option value="">All courses</option>
+              {courses.results.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Batch">
+            <select className={inputClass()} value={serverFilters.batch} onChange={(event) => setServerFilters((current) => ({ ...current, batch: event.target.value }))}>
+              <option value="">All batches</option>
+              {classes.results
+                .filter((item) => !serverFilters.course || Number(item.course) === Number(serverFilters.course))
+                .map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Teacher">
+            <select className={inputClass()} value={serverFilters.teacher} onChange={(event) => setServerFilters((current) => ({ ...current, teacher: event.target.value }))}>
+              <option value="">All teachers</option>
+              {teachers.results.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.full_name}</option>)}
+            </select>
+          </Field>
+          <Field label="Type">
+            <select className={inputClass()} value={serverFilters.assessment_type} onChange={(event) => setServerFilters((current) => ({ ...current, assessment_type: event.target.value }))}>
+              <option value="">All types</option>
+              {assessmentTypes.map((type) => <option key={type} value={type}>{type.replaceAll("_", " ")}</option>)}
+            </select>
+          </Field>
+          <Field label="Status">
+            <select className={inputClass()} value={serverFilters.status} onChange={(event) => setServerFilters((current) => ({ ...current, status: event.target.value }))}>
+              <option value="">All statuses</option>
+              {statuses.map((status) => <option key={status} value={status}>{status}</option>)}
+            </select>
+          </Field>
+          <Field label="From date">
+            <input type="date" className={inputClass()} value={serverFilters.date_from} onChange={(event) => setServerFilters((current) => ({ ...current, date_from: event.target.value }))} />
+          </Field>
+          <Field label="To date">
+            <input type="date" className={inputClass()} value={serverFilters.date_to} onChange={(event) => setServerFilters((current) => ({ ...current, date_to: event.target.value }))} />
+          </Field>
+        </div>
+      </section>
 
       <form className="rounded-md bg-white p-4 shadow-sm" onSubmit={saveAssessment}>
         <div className="grid gap-4 md:grid-cols-4">
@@ -267,7 +405,7 @@ export default function AssessmentsPage() {
       <DataTable
         title="Assessment Register"
         columns={columns}
-        rows={assessments.results}
+        rows={filteredAssessments}
         loading={assessments.loading}
         error={assessments.error}
         bulkActions={[{ label: "Archive", onClick: (rows) => Promise.all(rows.map((row) => runAssessmentAction(row, "archive", "Assessments archived."))) }]}
@@ -299,13 +437,23 @@ export default function AssessmentsPage() {
                 </button>
               </div>
             </div>
+            <div className="mb-3">
+              <Field label="Find student while entering marks">
+                <input
+                  className={inputClass()}
+                  value={entrySearch}
+                  onChange={(event) => setEntrySearch(event.target.value)}
+                  placeholder="Student name, roll number..."
+                />
+              </Field>
+            </div>
             <div className="max-h-96 overflow-auto">
               <table className="min-w-full divide-y divide-gray-100 text-sm">
                 <thead className="bg-gray-50">
                   <tr><th className="px-3 py-2 text-left">Student</th><th className="px-3 py-2 text-left">Marks</th><th className="px-3 py-2 text-left">Remarks</th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {students.map((student) => (
+                  {studentsForEntry.map((student) => (
                     <tr key={student.id}>
                       <td className="px-3 py-2">{student.name}</td>
                       <td className="px-3 py-2">
@@ -322,6 +470,26 @@ export default function AssessmentsPage() {
           </section>
 
           <section className="space-y-4">
+            <div className="rounded-md bg-white p-4 shadow-sm">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <Field label="Result search">
+                  <input className={inputClass()} value={resultSearch} onChange={(event) => setResultSearch(event.target.value)} placeholder="Student, grade, remarks..." />
+                </Field>
+                <Field label="Result">
+                  <select className={inputClass()} value={resultStatus} onChange={(event) => setResultStatus(event.target.value)}>
+                    <option value="">All results</option>
+                    <option value="passed">Passed</option>
+                    <option value="failed">Failed</option>
+                  </select>
+                </Field>
+                <Field label="Grade">
+                  <input className={inputClass()} value={gradeFilter} onChange={(event) => setGradeFilter(event.target.value)} placeholder="A+, B, C..." />
+                </Field>
+                <Field label="Minimum %">
+                  <input className={inputClass()} type="number" min="0" max="100" value={minPercentage} onChange={(event) => setMinPercentage(event.target.value)} placeholder="0" />
+                </Field>
+              </div>
+            </div>
             <DataTable title="Report Cards" columns={resultColumns} rows={resultRows} loading={false} empty="No marks saved yet" />
             <button className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700" onClick={() => window.print()}>
               <FileDown size={16} /> Print Report Cards

@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Banknote, FileText, Plus, Receipt, RefreshCcw } from "lucide-react";
 import DataTable from "../shared/DataTable";
 import PageHeader from "../shared/PageHeader";
 import StatCard from "../shared/StatCard";
 import { apiCreate, apiPost, useApiResource } from "../../hooks/useApiResource";
 import instance from "../../api/axiosInstance";
-
+import ReceiptPrintModal from "../reciept";
 const current = new Date();
 const initialPlan = {
   course: "",
@@ -15,7 +15,7 @@ const initialPlan = {
   material_fee: "0",
   exam_fee: "0",
   discount_allowed: "0",
-  currency: "USD",
+  currency: "AFN",
   due_day: "5",
   late_fee_amount: "0",
   grace_period_days: "0",
@@ -36,11 +36,21 @@ function Field({ label, children }) {
 }
 
 function Input(props) {
-  return <input {...props} className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cyan-600" />;
+  return (
+    <input
+      {...props}
+      className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cyan-600"
+    />
+  );
 }
 
 function Select(props) {
-  return <select {...props} className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cyan-600" />;
+  return (
+    <select
+      {...props}
+      className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cyan-600"
+    />
+  );
 }
 
 function Panel({ title, children }) {
@@ -54,7 +64,9 @@ function Panel({ title, children }) {
 
 async function downloadFile(endpoint, filename) {
   const response = await instance.get(endpoint, { responseType: "blob" });
-  const blob = new Blob([response.data], { type: response.headers["content-type"] || "application/pdf" });
+  const blob = new Blob([response.data], {
+    type: response.headers["content-type"] || "application/pdf",
+  });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -66,10 +78,28 @@ async function downloadFile(endpoint, filename) {
 export default function BillingPage() {
   const [activeTab, setActiveTab] = useState("Invoices");
   const [planForm, setPlanForm] = useState(initialPlan);
-  const [generateForm, setGenerateForm] = useState({ month: current.getMonth() + 1, year: current.getFullYear(), due_date: "", scope: "all", course: "", batch: "", student: "" });
-  const [paymentForm, setPaymentForm] = useState({ invoice: "", amount_paid: "", payment_method: "cash", reference_number: "", notes: "" });
+  const [generateForm, setGenerateForm] = useState({
+    month: current.getMonth() + 1,
+    year: current.getFullYear(),
+    due_date: "",
+    scope: "all",
+    course: "",
+    batch: "",
+    enrollment: "",
+  });
+  const [paymentForm, setPaymentForm] = useState({
+    invoice: "",
+    amount_paid: "",
+    payment_method: "cash",
+    reference_number: "",
+    notes: "",
+  });
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [receiptModal, setReceiptModal] = useState({
+    isOpen: false,
+    data: null,
+  });
 
   const invoices = useApiResource("/v1/invoices/");
   const payments = useApiResource("/v1/payments/");
@@ -79,23 +109,44 @@ export default function BillingPage() {
   const summary = useApiResource("/v1/invoices/revenue-summary/");
   const courses = useApiResource("/courses/");
   const batches = useApiResource("/classes/");
-  const students = useApiResource("/students/");
+  const enrollments = useApiResource("/enrollments/");
 
+  const [tenant, setTenant] = useState(null);
   const invoiceRows = invoices.results;
   const paymentRows = payments.results;
-  const selectedInvoice = invoiceRows.find((row) => String(row.id) === String(paymentForm.invoice));
+  const selectedInvoice = invoiceRows.find(
+    (row) => String(row.id) === String(paymentForm.invoice),
+  );
 
   const localSummary = useMemo(() => {
-    const expected = invoiceRows.reduce((total, row) => total + Number(row.final_amount || 0), 0);
-    const collected = invoiceRows.reduce((total, row) => total + Number(row.paid_amount || 0), 0);
-    const outstanding = invoiceRows.reduce((total, row) => total + Number(row.balance || 0), 0);
-    const overdue = invoiceRows.filter((row) => row.status === "overdue").reduce((total, row) => total + Number(row.balance || 0), 0);
+    const expected = invoiceRows.reduce(
+      (total, row) => total + Number(row.final_amount || 0),
+      0,
+    );
+    const collected = invoiceRows.reduce(
+      (total, row) => total + Number(row.paid_amount || 0),
+      0,
+    );
+    const outstanding = invoiceRows.reduce(
+      (total, row) => total + Number(row.balance || 0),
+      0,
+    );
+    const overdue = invoiceRows
+      .filter((row) => row.status === "overdue")
+      .reduce((total, row) => total + Number(row.balance || 0), 0);
     return { expected, collected, outstanding, overdue };
   }, [invoiceRows]);
 
   const cards = summary.data || {};
   const refreshAll = async () => {
-    await Promise.all([invoices.refetch(), payments.refetch(), ledger.refetch(), feePlans.refetch(), billingProfiles.refetch(), summary.refetch()]);
+    await Promise.all([
+      invoices.refetch(),
+      payments.refetch(),
+      ledger.refetch(),
+      feePlans.refetch(),
+      billingProfiles.refetch(),
+      summary.refetch(),
+    ]);
   };
 
   const submitPlan = async (event) => {
@@ -109,7 +160,11 @@ export default function BillingPage() {
       setMessage("Fee plan saved.");
       await refreshAll();
     } catch (error) {
-      setMessage(error.response?.data?.detail || JSON.stringify(error.response?.data || {}) || "Could not save fee plan.");
+      setMessage(
+        error.response?.data?.detail ||
+          JSON.stringify(error.response?.data || {}) ||
+          "Could not save fee plan.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -120,15 +175,26 @@ export default function BillingPage() {
     setSubmitting(true);
     setMessage("");
     try {
-      const payload = { month: Number(generateForm.month), year: Number(generateForm.year), due_date: generateForm.due_date || null };
-      if (generateForm.scope === "course" && generateForm.course) payload.course = generateForm.course;
-      if (generateForm.scope === "batch" && generateForm.batch) payload.batch = generateForm.batch;
-      if (generateForm.scope === "student" && generateForm.student) payload.student = generateForm.student;
+      const payload = {
+        month: Number(generateForm.month),
+        year: Number(generateForm.year),
+        due_date: generateForm.due_date || null,
+      };
+      if (generateForm.scope === "course" && generateForm.course)
+        payload.course = generateForm.course;
+      if (generateForm.scope === "batch" && generateForm.batch)
+        payload.batch = generateForm.batch;
+      if (generateForm.scope === "enrollment" && generateForm.enrollment)
+        payload.enrollment = generateForm.enrollment;
       const created = await apiPost("/v1/invoices/generate-monthly/", payload);
       setMessage(`${created.length || 0} invoices generated.`);
       await refreshAll();
     } catch (error) {
-      setMessage(error.response?.data?.detail || JSON.stringify(error.response?.data || {}) || "Could not generate invoices.");
+      setMessage(
+        error.response?.data?.detail ||
+          JSON.stringify(error.response?.data || {}) ||
+          "Could not generate invoices.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -140,24 +206,60 @@ export default function BillingPage() {
     setMessage("");
     try {
       await apiCreate("/v1/payments/", paymentForm);
-      setPaymentForm({ invoice: "", amount_paid: "", payment_method: "cash", reference_number: "", notes: "" });
+      setPaymentForm({
+        invoice: "",
+        amount_paid: "",
+        payment_method: "cash",
+        reference_number: "",
+        notes: "",
+      });
       setMessage("Payment recorded and invoice balance updated.");
       await refreshAll();
     } catch (error) {
-      setMessage(error.response?.data?.detail || JSON.stringify(error.response?.data || {}) || "Could not record payment.");
+      setMessage(
+        error.response?.data?.detail ||
+          JSON.stringify(error.response?.data || {}) ||
+          "Could not record payment.",
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
+  const getTenant = async () => {
+    try {
+      const response = await instance.get("/get-tenant");
+      setTenant(response.data);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  useEffect(() => {
+    getTenant();
+  }, []);
+
   const invoiceColumns = [
     { key: "invoice_number", label: "Invoice" },
     { key: "student_name", label: "Student" },
     { key: "enrollment_label", label: "Course / Batch" },
-    { key: "period", label: "Period", accessor: (row) => `${row.billing_month || row.month}/${row.billing_year || row.year}` },
+    {
+      key: "period",
+      label: "Period",
+      accessor: (row) =>
+        `${row.billing_month || row.month}/${row.billing_year || row.year}`,
+    },
     { key: "due_date", label: "Due" },
-    { key: "final_amount", label: "Amount", render: (row) => money(row.final_amount) },
-    { key: "paid_amount", label: "Paid", render: (row) => money(row.paid_amount) },
+    {
+      key: "final_amount",
+      label: "Amount",
+      render: (row) => money(row.final_amount),
+    },
+    {
+      key: "paid_amount",
+      label: "Paid",
+      render: (row) => money(row.paid_amount),
+    },
     { key: "balance", label: "Balance", render: (row) => money(row.balance) },
     { key: "status", label: "Status" },
   ];
@@ -168,7 +270,11 @@ export default function BillingPage() {
     { key: "course_name", label: "Course" },
     { key: "payment_date", label: "Date" },
     { key: "payment_method", label: "Method" },
-    { key: "amount_paid", label: "Amount", render: (row) => money(row.amount_paid) },
+    {
+      key: "amount_paid",
+      label: "Amount",
+      render: (row) => money(row.amount_paid),
+    },
     { key: "reference_number", label: "Reference" },
   ];
 
@@ -185,31 +291,95 @@ export default function BillingPage() {
 
   const planColumns = [
     { key: "course_name", label: "Course" },
-    { key: "batch_name", label: "Batch", render: (row) => row.batch_name || "Default" },
-    { key: "monthly_fee", label: "Monthly", render: (row) => money(row.monthly_fee) },
-    { key: "registration_fee", label: "Registration", render: (row) => money(row.registration_fee) },
+    {
+      key: "batch_name",
+      label: "Batch",
+      render: (row) => row.batch_name || "Default",
+    },
+    {
+      key: "monthly_fee",
+      label: "Monthly",
+      render: (row) => money(row.monthly_fee),
+    },
+    {
+      key: "registration_fee",
+      label: "Registration",
+      render: (row) => money(row.registration_fee),
+    },
     { key: "due_day", label: "Due Day" },
-    { key: "late_fee_amount", label: "Late Fee", render: (row) => money(row.late_fee_amount) },
-    { key: "is_active", label: "Active", render: (row) => (row.is_active ? "Yes" : "No") },
+    {
+      key: "late_fee_amount",
+      label: "Late Fee",
+      render: (row) => money(row.late_fee_amount),
+    },
+    {
+      key: "is_active",
+      label: "Active",
+      render: (row) => (row.is_active ? "Yes" : "No"),
+    },
   ];
 
   return (
     <div>
-      <PageHeader title="Course Fee Management" description="Enrollment-based fee plans, monthly invoices, partial payments, receipts, and revenue controls." />
+      <PageHeader
+        title="Course Fee Management"
+        description="Enrollment-based fee plans, monthly invoices, partial payments, receipts, and revenue controls."
+      />
 
-      {message ? <div className="mb-4 rounded-md border border-cyan-100 bg-cyan-50 px-4 py-3 text-sm text-cyan-800">{message}</div> : null}
+      {message ? (
+        <div className="mb-4 rounded-md border border-cyan-100 bg-cyan-50 px-4 py-3 text-sm text-cyan-800">
+          {message}
+        </div>
+      ) : null}
 
       <div className="mb-6 grid gap-4 md:grid-cols-4">
-        <StatCard title="Expected Revenue" value={money(cards.expected_monthly_revenue ?? localSummary.expected)} accent="border-sky-500" />
-        <StatCard title="Collected" value={money(cards.collected_revenue ?? localSummary.collected)} accent="border-emerald-500" />
-        <StatCard title="Outstanding" value={money(cards.outstanding_revenue ?? localSummary.outstanding)} accent="border-orange-500" />
-        <StatCard title="Overdue" value={money(cards.overdue_revenue ?? localSummary.overdue)} accent="border-red-500" />
+        <StatCard
+          title="Expected Revenue"
+          value={money(cards.expected_monthly_revenue ?? localSummary.expected)}
+          accent="border-sky-500"
+        />
+        <StatCard
+          title="Collected"
+          value={money(cards.collected_revenue ?? localSummary.collected)}
+          accent="border-emerald-500"
+        />
+        <StatCard
+          title="Outstanding"
+          value={money(cards.outstanding_revenue ?? localSummary.outstanding)}
+          accent="border-orange-500"
+        />
+        <StatCard
+          title="Overdue"
+          value={money(cards.overdue_revenue ?? localSummary.overdue)}
+          accent="border-red-500"
+        />
       </div>
 
       <div className="mb-5 flex flex-wrap gap-2">
-        {["Invoices", "Collect Payment", "Generate", "Fee Plans", "Payments", "Ledger"].map((tab) => (
-          <button key={tab} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${activeTab === tab ? "bg-cyan-700 text-white" : "bg-white text-gray-700"}`} onClick={() => setActiveTab(tab)}>
-            {tab === "Invoices" ? <FileText size={16} /> : tab === "Collect Payment" ? <Banknote size={16} /> : tab === "Generate" ? <RefreshCcw size={16} /> : tab === "Fee Plans" ? <Plus size={16} /> : <Receipt size={16} />}
+        {[
+          "Invoices",
+          "Collect Payment",
+          "Generate",
+          "Fee Plans",
+          "Payments",
+          "Ledger",
+        ].map((tab) => (
+          <button
+            key={tab}
+            className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${activeTab === tab ? "bg-cyan-700 text-white" : "bg-white text-gray-700"}`}
+            onClick={() => setActiveTab(tab)}
+          >
+            {tab === "Invoices" ? (
+              <FileText size={16} />
+            ) : tab === "Collect Payment" ? (
+              <Banknote size={16} />
+            ) : tab === "Generate" ? (
+              <RefreshCcw size={16} />
+            ) : tab === "Fee Plans" ? (
+              <Plus size={16} />
+            ) : (
+              <Receipt size={16} />
+            )}
             {tab}
           </button>
         ))}
@@ -223,12 +393,67 @@ export default function BillingPage() {
           loading={invoices.loading}
           error={invoices.error}
           actions={(row) => [
-            { label: "Collect", onClick: () => { setPaymentForm((form) => ({ ...form, invoice: row.id, amount_paid: row.balance })); setActiveTab("Collect Payment"); } },
-            { label: "PDF", onClick: () => downloadFile(`/v1/invoices/${row.id}/pdf/`, `${row.invoice_number}.pdf`) },
-            { label: "Discount", onClick: async () => { const amount = window.prompt("Discount amount"); if (amount) { await apiPost(`/v1/invoices/${row.id}/apply-discount/`, { amount, notes: "Discount applied from billing console." }); await refreshAll(); } } },
-            { label: "Scholarship", onClick: async () => { const amount = window.prompt("Scholarship amount"); if (amount) { await apiPost(`/v1/invoices/${row.id}/apply-scholarship/`, { amount, notes: "Scholarship applied from billing console." }); await refreshAll(); } } },
-            { label: "Cancel", onClick: async () => { await apiPost(`/v1/invoices/${row.id}/cancel/`); await refreshAll(); } },
-            { label: "Waive", onClick: async () => { await apiPost(`/v1/invoices/${row.id}/waive/`, { notes: "Balance waived from billing console." }); await refreshAll(); } },
+            {
+              label: "Collect",
+              onClick: () => {
+                setPaymentForm((form) => ({
+                  ...form,
+                  invoice: row.id,
+                  amount_paid: row.balance,
+                }));
+                setActiveTab("Collect Payment");
+              },
+            },
+            {
+              label: "PDF",
+              onClick: () =>
+                downloadFile(
+                  `/v1/invoices/${row.id}/pdf/`,
+                  `${row.invoice_number}.pdf`,
+                ),
+            },
+            {
+              label: "Discount",
+              onClick: async () => {
+                const amount = window.prompt("Discount amount");
+                if (amount) {
+                  await apiPost(`/v1/invoices/${row.id}/apply-discount/`, {
+                    amount,
+                    notes: "Discount applied from billing console.",
+                  });
+                  await refreshAll();
+                }
+              },
+            },
+            {
+              label: "Scholarship",
+              onClick: async () => {
+                const amount = window.prompt("Scholarship amount");
+                if (amount) {
+                  await apiPost(`/v1/invoices/${row.id}/apply-scholarship/`, {
+                    amount,
+                    notes: "Scholarship applied from billing console.",
+                  });
+                  await refreshAll();
+                }
+              },
+            },
+            {
+              label: "Cancel",
+              onClick: async () => {
+                await apiPost(`/v1/invoices/${row.id}/cancel/`);
+                await refreshAll();
+              },
+            },
+            {
+              label: "Waive",
+              onClick: async () => {
+                await apiPost(`/v1/invoices/${row.id}/waive/`, {
+                  notes: "Balance waived from billing console.",
+                });
+                await refreshAll();
+              },
+            },
           ]}
         />
       ) : null}
@@ -237,18 +462,61 @@ export default function BillingPage() {
         <Panel title="Collect Payment">
           <form className="grid gap-4 md:grid-cols-2" onSubmit={collectPayment}>
             <Field label="Invoice">
-              <Select required value={paymentForm.invoice} onChange={(e) => setPaymentForm({ ...paymentForm, invoice: e.target.value, amount_paid: invoiceRows.find((row) => String(row.id) === e.target.value)?.balance || "" })}>
+              <Select
+                required
+                value={paymentForm.invoice}
+                onChange={(e) =>
+                  setPaymentForm({
+                    ...paymentForm,
+                    invoice: e.target.value,
+                    amount_paid:
+                      invoiceRows.find(
+                        (row) => String(row.id) === e.target.value,
+                      )?.balance || "",
+                  })
+                }
+              >
                 <option value="">Select invoice</option>
-                {invoiceRows.filter((row) => Number(row.balance || 0) > 0 && row.status !== "cancelled").map((row) => (
-                  <option key={row.id} value={row.id}>{row.invoice_number} - {row.student_name} - {money(row.balance)}</option>
-                ))}
+                {invoiceRows
+                  .filter(
+                    (row) =>
+                      Number(row.balance || 0) > 0 &&
+                      row.status !== "cancelled",
+                  )
+                  .map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.invoice_number} - {row.student_name} -{" "}
+                      {money(row.balance)}
+                    </option>
+                  ))}
               </Select>
             </Field>
             <Field label="Amount">
-              <Input required type="number" min="0.01" step="0.01" max={selectedInvoice?.balance || undefined} value={paymentForm.amount_paid} onChange={(e) => setPaymentForm({ ...paymentForm, amount_paid: e.target.value })} />
+              <Input
+                required
+                type="number"
+                min="0.01"
+                step="0.01"
+                max={selectedInvoice?.balance || undefined}
+                value={paymentForm.amount_paid}
+                onChange={(e) =>
+                  setPaymentForm({
+                    ...paymentForm,
+                    amount_paid: e.target.value,
+                  })
+                }
+              />
             </Field>
             <Field label="Method">
-              <Select value={paymentForm.payment_method} onChange={(e) => setPaymentForm({ ...paymentForm, payment_method: e.target.value })}>
+              <Select
+                value={paymentForm.payment_method}
+                onChange={(e) =>
+                  setPaymentForm({
+                    ...paymentForm,
+                    payment_method: e.target.value,
+                  })
+                }
+              >
                 <option value="cash">Cash</option>
                 <option value="bank">Bank Transfer</option>
                 <option value="card">Credit/Debit Card</option>
@@ -257,13 +525,31 @@ export default function BillingPage() {
               </Select>
             </Field>
             <Field label="Reference Number">
-              <Input value={paymentForm.reference_number} onChange={(e) => setPaymentForm({ ...paymentForm, reference_number: e.target.value })} />
+              <Input
+                value={paymentForm.reference_number}
+                onChange={(e) =>
+                  setPaymentForm({
+                    ...paymentForm,
+                    reference_number: e.target.value,
+                  })
+                }
+              />
             </Field>
             <Field label="Notes">
-              <Input value={paymentForm.notes} onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })} />
+              <Input
+                value={paymentForm.notes}
+                onChange={(e) =>
+                  setPaymentForm({ ...paymentForm, notes: e.target.value })
+                }
+              />
             </Field>
             <div className="md:col-span-2">
-              <button disabled={submitting} className="rounded-md bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Record Payment</button>
+              <button
+                disabled={submitting}
+                className="rounded-md bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                Record Payment
+              </button>
             </div>
           </form>
         </Panel>
@@ -271,23 +557,119 @@ export default function BillingPage() {
 
       {activeTab === "Generate" ? (
         <Panel title="Generate Monthly Invoices">
-          <form className="grid gap-4 md:grid-cols-3" onSubmit={generateInvoices}>
-            <Field label="Month"><Input required type="number" min="1" max="12" value={generateForm.month} onChange={(e) => setGenerateForm({ ...generateForm, month: e.target.value })} /></Field>
-            <Field label="Year"><Input required type="number" min="2000" value={generateForm.year} onChange={(e) => setGenerateForm({ ...generateForm, year: e.target.value })} /></Field>
-            <Field label="Due Date"><Input type="date" value={generateForm.due_date} onChange={(e) => setGenerateForm({ ...generateForm, due_date: e.target.value })} /></Field>
+          <form
+            className="grid gap-4 md:grid-cols-3"
+            onSubmit={generateInvoices}
+          >
+            <Field label="Month">
+              <Input
+                required
+                type="number"
+                min="1"
+                max="12"
+                value={generateForm.month}
+                onChange={(e) =>
+                  setGenerateForm({ ...generateForm, month: e.target.value })
+                }
+              />
+            </Field>
+            <Field label="Year">
+              <Input
+                required
+                type="number"
+                min="2000"
+                value={generateForm.year}
+                onChange={(e) =>
+                  setGenerateForm({ ...generateForm, year: e.target.value })
+                }
+              />
+            </Field>
+            <Field label="Due Date">
+              <Input
+                type="date"
+                value={generateForm.due_date}
+                onChange={(e) =>
+                  setGenerateForm({ ...generateForm, due_date: e.target.value })
+                }
+              />
+            </Field>
             <Field label="Scope">
-              <Select value={generateForm.scope} onChange={(e) => setGenerateForm({ ...generateForm, scope: e.target.value })}>
+              <Select
+                value={generateForm.scope}
+                onChange={(e) =>
+                  setGenerateForm({ ...generateForm, scope: e.target.value })
+                }
+              >
                 <option value="all">All active enrollments</option>
                 <option value="course">Course</option>
                 <option value="batch">Batch</option>
-                <option value="student">Student</option>
+                <option value="enrollment">Enrollment</option>
               </Select>
             </Field>
-            {generateForm.scope === "course" ? <Field label="Course"><Select required value={generateForm.course} onChange={(e) => setGenerateForm({ ...generateForm, course: e.target.value })}><option value="">Select course</option>{courses.results.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select></Field> : null}
-            {generateForm.scope === "batch" ? <Field label="Batch"><Select required value={generateForm.batch} onChange={(e) => setGenerateForm({ ...generateForm, batch: e.target.value })}><option value="">Select batch</option>{batches.results.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select></Field> : null}
-            {generateForm.scope === "student" ? <Field label="Student"><Select required value={generateForm.student} onChange={(e) => setGenerateForm({ ...generateForm, student: e.target.value })}><option value="">Select student</option>{students.results.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select></Field> : null}
+            {generateForm.scope === "course" ? (
+              <Field label="Course">
+                <Select
+                  required
+                  value={generateForm.course}
+                  onChange={(e) =>
+                    setGenerateForm({ ...generateForm, course: e.target.value })
+                  }
+                >
+                  <option value="">Select course</option>
+                  {courses.results.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : null}
+            {generateForm.scope === "batch" ? (
+              <Field label="Batch">
+                <Select
+                  required
+                  value={generateForm.batch}
+                  onChange={(e) =>
+                    setGenerateForm({ ...generateForm, batch: e.target.value })
+                  }
+                >
+                  <option value="">Select batch</option>
+                  {batches.results.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : null}
+            {generateForm.scope === "enrollment" ? (
+              <Field label="Enrollment">
+                <Select
+                  required
+                  value={generateForm.enrollment}
+                  onChange={(e) =>
+                    setGenerateForm({
+                      ...generateForm,
+                      enrollment: e.target.value,
+                    })
+                  }
+                >
+                  <option value="">Select enrollment</option>
+                  {enrollments.results.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.student_name} - {row.course_name} / {row.batch_name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : null}
             <div className="md:col-span-3">
-              <button disabled={submitting} className="rounded-md bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Generate Invoices</button>
+              <button
+                disabled={submitting}
+                className="rounded-md bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                Generate Invoices
+              </button>
             </div>
           </form>
         </Panel>
@@ -297,29 +679,196 @@ export default function BillingPage() {
         <div className="space-y-6">
           <Panel title="Create Fee Plan">
             <form className="grid gap-4 md:grid-cols-4" onSubmit={submitPlan}>
-              <Field label="Course"><Select required value={planForm.course} onChange={(e) => setPlanForm({ ...planForm, course: e.target.value })}><option value="">Select course</option>{courses.results.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select></Field>
-              <Field label="Batch Override"><Select value={planForm.batch} onChange={(e) => setPlanForm({ ...planForm, batch: e.target.value })}><option value="">Default for course</option>{batches.results.filter((row) => !planForm.course || String(row.course) === String(planForm.course)).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select></Field>
-              <Field label="Monthly Fee"><Input required type="number" min="0.01" step="0.01" value={planForm.monthly_fee} onChange={(e) => setPlanForm({ ...planForm, monthly_fee: e.target.value })} /></Field>
-              <Field label="Currency"><Input value={planForm.currency} maxLength={3} onChange={(e) => setPlanForm({ ...planForm, currency: e.target.value.toUpperCase() })} /></Field>
-              <Field label="Registration Fee"><Input type="number" min="0" step="0.01" value={planForm.registration_fee} onChange={(e) => setPlanForm({ ...planForm, registration_fee: e.target.value })} /></Field>
-              <Field label="Material Fee"><Input type="number" min="0" step="0.01" value={planForm.material_fee} onChange={(e) => setPlanForm({ ...planForm, material_fee: e.target.value })} /></Field>
-              <Field label="Exam Fee"><Input type="number" min="0" step="0.01" value={planForm.exam_fee} onChange={(e) => setPlanForm({ ...planForm, exam_fee: e.target.value })} /></Field>
-              <Field label="Max Discount"><Input type="number" min="0" step="0.01" value={planForm.discount_allowed} onChange={(e) => setPlanForm({ ...planForm, discount_allowed: e.target.value })} /></Field>
-              <Field label="Due Day"><Input type="number" min="1" max="31" value={planForm.due_day} onChange={(e) => setPlanForm({ ...planForm, due_day: e.target.value })} /></Field>
-              <Field label="Late Fee"><Input type="number" min="0" step="0.01" value={planForm.late_fee_amount} onChange={(e) => setPlanForm({ ...planForm, late_fee_amount: e.target.value })} /></Field>
-              <Field label="Grace Days"><Input type="number" min="0" value={planForm.grace_period_days} onChange={(e) => setPlanForm({ ...planForm, grace_period_days: e.target.value })} /></Field>
-              <div className="flex items-end"><button disabled={submitting} className="rounded-md bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Save Plan</button></div>
+              <Field label="Course">
+                <Select
+                  required
+                  value={planForm.course}
+                  onChange={(e) =>
+                    setPlanForm({ ...planForm, course: e.target.value })
+                  }
+                >
+                  <option value="">Select course</option>
+                  {courses.results.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Batch Override">
+                <Select
+                  value={planForm.batch}
+                  onChange={(e) =>
+                    setPlanForm({ ...planForm, batch: e.target.value })
+                  }
+                >
+                  <option value="">Default for course</option>
+                  {batches.results
+                    .filter(
+                      (row) =>
+                        !planForm.course ||
+                        String(row.course) === String(planForm.course),
+                    )
+                    .map((row) => (
+                      <option key={row.id} value={row.id}>
+                        {row.name}
+                      </option>
+                    ))}
+                </Select>
+              </Field>
+              <Field label="Monthly Fee">
+                <Input
+                  required
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={planForm.monthly_fee}
+                  onChange={(e) =>
+                    setPlanForm({ ...planForm, monthly_fee: e.target.value })
+                  }
+                />
+              </Field>
+              <Field label="Currency">
+                <Input
+                  value={planForm.currency}
+                  maxLength={3}
+                  onChange={(e) =>
+                    setPlanForm({
+                      ...planForm,
+                      currency: e.target.value.toUpperCase(),
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Registration Fee">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={planForm.registration_fee}
+                  onChange={(e) =>
+                    setPlanForm({
+                      ...planForm,
+                      registration_fee: e.target.value,
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Material Fee">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={planForm.material_fee}
+                  onChange={(e) =>
+                    setPlanForm({ ...planForm, material_fee: e.target.value })
+                  }
+                />
+              </Field>
+              <Field label="Exam Fee">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={planForm.exam_fee}
+                  onChange={(e) =>
+                    setPlanForm({ ...planForm, exam_fee: e.target.value })
+                  }
+                />
+              </Field>
+              <Field label="Max Discount">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={planForm.discount_allowed}
+                  onChange={(e) =>
+                    setPlanForm({
+                      ...planForm,
+                      discount_allowed: e.target.value,
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Due Day">
+                <Input
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={planForm.due_day}
+                  onChange={(e) =>
+                    setPlanForm({ ...planForm, due_day: e.target.value })
+                  }
+                />
+              </Field>
+              <Field label="Late Fee">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={planForm.late_fee_amount}
+                  onChange={(e) =>
+                    setPlanForm({
+                      ...planForm,
+                      late_fee_amount: e.target.value,
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Grace Days">
+                <Input
+                  type="number"
+                  min="0"
+                  value={planForm.grace_period_days}
+                  onChange={(e) =>
+                    setPlanForm({
+                      ...planForm,
+                      grace_period_days: e.target.value,
+                    })
+                  }
+                />
+              </Field>
+              <div className="flex items-end">
+                <button
+                  disabled={submitting}
+                  className="rounded-md bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  Save Plan
+                </button>
+              </div>
             </form>
           </Panel>
-          <DataTable title="Fee Plans" columns={planColumns} rows={feePlans.results} loading={feePlans.loading} error={feePlans.error} />
-          <DataTable title="Enrollment Billing Profiles" columns={[
-            { key: "student_name", label: "Student" },
-            { key: "course_name", label: "Course" },
-            { key: "batch_name", label: "Batch" },
-            { key: "discount_type", label: "Discount" },
-            { key: "discount_amount", label: "Amount" },
-            { key: "billing_status", label: "Status" },
-          ]} rows={billingProfiles.results} loading={billingProfiles.loading} error={billingProfiles.error} />
+          <DataTable
+            title="Fee Plans"
+            columns={planColumns}
+            rows={feePlans.results}
+            loading={feePlans.loading}
+            error={feePlans.error}
+          />
+          <DataTable
+            title="Enrollment Billing Profiles"
+            columns={[
+              { key: "student_name", label: "Student" },
+              { key: "course_name", label: "Course" },
+              { key: "batch_name", label: "Batch" },
+              {
+                key: "monthly_fee",
+                label: "Monthly",
+                render: (row) => money(row.monthly_fee),
+              },
+              {
+                key: "registration_fee",
+                label: "Registration",
+                render: (row) => money(row.registration_fee),
+              },
+              { key: "discount_type", label: "Discount" },
+              { key: "discount_amount", label: "Amount" },
+              { key: "billing_status", label: "Status" },
+            ]}
+            rows={billingProfiles.results}
+            loading={billingProfiles.loading}
+            error={billingProfiles.error}
+          />
         </div>
       ) : null}
 
@@ -331,17 +880,40 @@ export default function BillingPage() {
           loading={payments.loading}
           error={payments.error}
           actions={(row) => [
-            { label: "Receipt", onClick: () => downloadFile(`/v1/payments/${row.id}/receipt/`, `${row.receipt_number}.pdf`) },
+            {
+              label: "Receipt",
+              onClick: () => setReceiptModal({ isOpen: true, data: row }),
+            },
           ]}
         />
       ) : null}
 
+      <ReceiptPrintModal
+        receipt={receiptModal.data}
+        tenant={tenant}
+        isOpen={receiptModal.isOpen}
+        onClose={() => setReceiptModal({ isOpen: false, data: null })}
+      />
+
       {activeTab === "Ledger" ? (
         <div className="space-y-4">
           <div className="flex justify-end">
-            <button className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700" onClick={() => downloadFile("/v1/student-ledger/pdf/", "student-ledger.pdf")}>Print Ledger</button>
+            <button
+              className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700"
+              onClick={() =>
+                downloadFile("/v1/student-ledger/pdf/", "student-ledger.pdf")
+              }
+            >
+              Print Ledger
+            </button>
           </div>
-          <DataTable title="Student Ledger" columns={ledgerColumns} rows={ledger.results} loading={ledger.loading} error={ledger.error} />
+          <DataTable
+            title="Student Ledger"
+            columns={ledgerColumns}
+            rows={ledger.results}
+            loading={ledger.loading}
+            error={ledger.error}
+          />
         </div>
       ) : null}
     </div>

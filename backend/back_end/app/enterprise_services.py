@@ -26,6 +26,7 @@ from .models import (
     Students,
     Teachers,
 )
+from .services.notification_service import notify_admins, send_notification
 
 
 GRADE_SCALE = (
@@ -93,20 +94,16 @@ def publish_assessment(assessment, user):
     assessment.save(update_fields=["status", "publish_date", "updated_at"])
 
     students = Students.objects.filter(enrollments__tenant=assessment.tenant, enrollments__batch=assessment.batch, enrollments__status=Enrollment.Status.ACTIVE).select_related("user").distinct()
-    notifications = [
-        Notification(
-            tenant=assessment.tenant,
-            recipient=student.user,
-            notification_type=Notification.NotificationType.ASSESSMENT_PUBLISHED,
-            title="Assessment result published",
-            message=f"Results for {assessment.title} are now available.",
-            metadata={"assessment_id": assessment.id},
-            created_by=user,
-        )
-        for student in students
-        if student.user_id
-    ]
-    Notification.objects.bulk_create(notifications)
+    send_notification(
+        tenant=assessment.tenant,
+        recipients=[student.user for student in students if student.user_id],
+        notification_type=Notification.NotificationType.ASSESSMENT_PUBLISHED,
+        title="Assessment result published",
+        message=f"Results for {assessment.title} are now available.",
+        metadata={"assessment_id": assessment.id},
+        created_by=user,
+        dedupe_key=f"assessment:{assessment.id}:published",
+    )
     return assessment
 
 
@@ -206,30 +203,23 @@ def move_stock(*, item, transaction_type, quantity, user, unit_price=Decimal("0"
         reference=reference,
         created_by=user,
     )
-    if item.status == StationeryItem.Status.LOW_STOCK:
-        admin_users = item.tenant.users.filter(role__slug__in=["admin", "super-admin", "super_admin"]) if item.tenant_id else []
-        Notification.objects.bulk_create(
-            [
-                Notification(
-                    tenant=item.tenant,
-                    recipient=admin,
-                    notification_type=Notification.NotificationType.INVENTORY_LOW,
-                    title="Inventory low",
-                    message=f"{item.item_name} is at or below minimum stock.",
-                    metadata={"item_id": item.id},
-                    created_by=user,
-                )
-                for admin in admin_users
-            ]
+    if item.status in [StationeryItem.Status.LOW_STOCK, StationeryItem.Status.OUT_OF_STOCK]:
+        notify_admins(
+            tenant=item.tenant,
+            notification_type=Notification.NotificationType.INVENTORY_LOW,
+            title="Inventory low",
+            message=f"{item.item_name} has {item.quantity} in stock. Minimum is {item.minimum_stock}.",
+            metadata={"item_id": item.id},
+            created_by=user,
+            dedupe_key=f"inventory:{item.id}:{item.status}",
         )
     return transaction
 
 
 @transaction.atomic
-def create_stationery_purchase(*, tenant, student, items, discount, tax, payment_status, user):
+def create_stationery_purchase(*, tenant, items, discount, tax, payment_status, user):
     purchase = StationeryPurchase.objects.create(
         tenant=tenant,
-        student=student,
         discount=Decimal(str(discount or 0)),
         tax=Decimal(str(tax or 0)),
         payment_status=payment_status,
@@ -266,6 +256,15 @@ def create_stationery_purchase(*, tenant, student, items, discount, tax, payment
 
     purchase.total = subtotal - purchase.discount + purchase.tax
     purchase.save(update_fields=["total", "updated_at"])
+    notify_admins(
+        tenant=tenant,
+        notification_type=Notification.NotificationType.STATIONERY_SALE,
+        title="Stationery sale completed",
+        message=f"Sale {purchase.receipt_number} completed for {purchase.total}.",
+        metadata={"purchase_id": purchase.id},
+        created_by=user,
+        dedupe_key=f"stationery-sale:{purchase.id}",
+    )
     return purchase
 
 
@@ -280,7 +279,8 @@ def dashboard_payload(tenant, user):
         "teachers": Teachers.objects.filter(tenant=tenant).count(),
         "staff": Staff.objects.filter(tenant=tenant).count(),
         "classes": Classes.objects.filter(tenant=tenant).count(),
-        "courses": Classes.objects.filter(tenant=tenant).count(),
+        "batches": Classes.objects.filter(tenant=tenant).count(),
+        "courses": Course.objects.filter(tenant=tenant).count(),
         "todays_attendance": Attendance.objects.filter(tenant=tenant, date=today, is_present=True).count(),
         "monthly_attendance_percentage": round((present_attendance_month / total_attendance_month) * 100, 2) if total_attendance_month else 0,
         "collected_fees": Payment.objects.filter(tenant=tenant, payment_date__gte=month_start).aggregate(total=Sum("amount_paid"))["total"] or 0,

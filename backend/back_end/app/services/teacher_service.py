@@ -5,7 +5,7 @@ from app.services.user_service import create_user_account, get_required_role, up
 
 
 @transaction.atomic
-def create_teacher(*, tenant, username, password, full_name, email, phone_number="", subject="", department=""):
+def create_teacher(*, tenant, username, password, full_name, email, phone_number="", subject="", department="", is_active=True):
     role = get_required_role(tenant=tenant, slug="teacher")
     first_name, _, last_name = full_name.partition(" ")
     user = create_user_account(
@@ -18,6 +18,10 @@ def create_teacher(*, tenant, username, password, full_name, email, phone_number
         last_name=last_name,
         phone=phone_number,
     )
+    if is_active is not True:
+        user.is_active = False
+        user.is_deactivated = True
+        user.save(update_fields=["is_active", "is_deactivated"])
     return Teachers.objects.create(
         tenant=tenant,
         user=user,
@@ -26,6 +30,7 @@ def create_teacher(*, tenant, username, password, full_name, email, phone_number
         email_address=email,
         subject=subject,
         department=department,
+        is_active=bool(is_active),
     )
 
 
@@ -55,6 +60,8 @@ def update_teacher(teacher, *, username=None, password=None, email=None, full_na
         teacher.department = department
     if is_active is not None:
         teacher.is_active = bool(is_active)
-        teacher.is_archived = not bool(is_active)
+        if is_active:
+            teacher.is_archived = False
+            teacher.archived_at = None
     teacher.save()
     return teacher

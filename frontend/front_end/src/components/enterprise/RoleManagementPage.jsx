@@ -4,6 +4,7 @@ import PageHeader from "../shared/PageHeader";
 import { apiCreate, apiDelete, apiPost, apiUpdate, useApiResource } from "../../hooks/useApiResource";
 
 const emptyRole = { name: "", slug: "", description: "", is_active: true, permissions: [] };
+const fixedRoleSlugs = new Set(["super-admin", "super_admin", "student"]);
 
 function inputClass() {
   return "w-full rounded-md border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cyan-600";
@@ -48,11 +49,13 @@ export default function RoleManagementPage() {
   };
 
   const togglePermission = async (role, permission, enabled) => {
+    if (fixedRoleSlugs.has(role.slug)) return;
     await apiPost("/v1/roles/set-permission/", { role: role.id, permission: permission.id, enabled });
     await matrix.refetch();
   };
 
   const toggleModule = async (role, permissions, enabled) => {
+    if (fixedRoleSlugs.has(role.slug)) return;
     await Promise.all(permissions.map((permission) => apiPost("/v1/roles/set-permission/", { role: role.id, permission: permission.id, enabled })));
     await matrix.refetch();
   };
@@ -74,6 +77,7 @@ export default function RoleManagementPage() {
   ];
 
   const matrixRoles = matrix.data?.roles || [];
+  const manageableRoles = roles.results.filter((role) => !fixedRoleSlugs.has(role.slug));
   const groups = matrix.data?.groups || {};
 
   return (
@@ -103,7 +107,7 @@ export default function RoleManagementPage() {
       <DataTable
         title="Role List"
         columns={columns}
-        rows={roles.results}
+        rows={manageableRoles}
         loading={roles.loading}
         error={roles.error}
         actions={(row) => [

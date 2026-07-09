@@ -1,8 +1,9 @@
-import { useState, useContext } from "react";
+import { useEffect, useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../AuthProvider";
 import { Eye, EyeOff } from "lucide-react";
 import instance from "../api/axiosInstance";
+import { firstAccessiblePath, firstAccessibleTeacherPath } from "../routes/appRoutes";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -10,8 +11,20 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState(null);
-  const { login } = useContext(AuthContext);
+  const { login, user, permissions, initializing } = useContext(AuthContext);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (initializing || !user) return;
+    const roleSlug = user.role_slug || user.role_details?.slug;
+    if (roleSlug === "teacher") {
+      navigate(firstAccessibleTeacherPath(permissions), { replace: true });
+    } else if (roleSlug === "student") {
+      navigate("/student/dashboard", { replace: true });
+    } else {
+      navigate(firstAccessiblePath(permissions), { replace: true });
+    }
+  }, [initializing, navigate, permissions, user]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -30,19 +43,17 @@ export default function LoginPage() {
       }
 
       const roleSlug = profile.role_slug || profile.role_details?.slug;
-      const modules = profile.allowed_modules || [];
-      if (roleSlug === "super-admin" || roleSlug === "super_admin" || roleSlug === "admin") {
-        navigate("/admin/dashboard");
-      } else if (roleSlug === "teacher") {
-        navigate("/teacher/dashboard");
+      if (roleSlug === "teacher") {
+        navigate(firstAccessibleTeacherPath(profile.permissions || []), { replace: true });
       } else if (roleSlug === "student") {
         navigate("/student/dashboard");
-      } else if (modules.includes("fees")) {
-        navigate("/admin/dashboard/billing");
-      } else if (modules.includes("stationery") || modules.includes("inventory")) {
-        navigate("/admin/dashboard/stationery");
       } else {
-        navigate("/admin/dashboard");
+        const nextPath = firstAccessiblePath(profile.permissions || []);
+        if (nextPath === "/access-denied") {
+          setError("Your account has not been assigned any permissions. Please contact your administrator.");
+          return;
+        }
+        navigate(nextPath, { replace: true });
       }
     } catch (err) {
       console.error("Login error:", err);

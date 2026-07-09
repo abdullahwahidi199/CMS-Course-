@@ -186,7 +186,6 @@ class EnrollmentBillingProfileSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="enrollment.student.name", read_only=True)
     course_name = serializers.CharField(source="enrollment.course.name", read_only=True)
     batch_name = serializers.CharField(source="enrollment.batch.name", read_only=True)
-    monthly_fee = serializers.DecimalField(source="fee_plan.monthly_fee", max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
         model = EnrollmentBillingProfile
@@ -206,9 +205,9 @@ class EnrollmentBillingProfileSerializer(serializers.ModelSerializer):
 
 class PaymentSerializer(serializers.ModelSerializer):
     invoice_number = serializers.CharField(source="invoice.invoice_number", read_only=True)
-    student_name = serializers.CharField(source="student.name", read_only=True)
-    course_name = serializers.CharField(source="enrollment.course.name", read_only=True)
-    batch_name = serializers.CharField(source="enrollment.batch.name", read_only=True)
+    student_name = serializers.CharField(source="invoice.student.name", read_only=True)
+    course_name = serializers.CharField(source="invoice.course.name", read_only=True)
+    batch_name = serializers.CharField(source="invoice.batch.name", read_only=True)
 
     class Meta:
         model = Payment
@@ -219,6 +218,16 @@ class PaymentSerializer(serializers.ModelSerializer):
         if value <= 0:
             raise serializers.ValidationError("Payment amount must be greater than zero.")
         return value
+
+    def validate(self, attrs):
+        invoice = attrs.get("invoice", getattr(self.instance, "invoice", None))
+        amount = attrs.get("amount_paid", getattr(self.instance, "amount_paid", None))
+        if invoice and amount is not None:
+            if invoice.status == Invoice.Status.CANCELLED:
+                raise serializers.ValidationError({"invoice": "Payments cannot be recorded against a cancelled invoice."})
+            if Decimal(str(amount)) > Decimal(str(invoice.balance or 0)):
+                raise serializers.ValidationError({"amount_paid": "Payment amount cannot be greater than the invoice balance."})
+        return attrs
 
 
 class InvoiceSerializer(serializers.ModelSerializer):
@@ -348,7 +357,6 @@ class StationeryPurchaseItemSerializer(serializers.ModelSerializer):
 
 
 class StationeryPurchaseSerializer(serializers.ModelSerializer):
-    student_name = serializers.CharField(source="student.name", read_only=True)
     items = StationeryPurchaseItemSerializer(many=True)
 
     class Meta:

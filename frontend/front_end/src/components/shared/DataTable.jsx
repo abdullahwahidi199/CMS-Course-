@@ -21,6 +21,49 @@ function exportCsv(columns, rows, filename) {
   URL.revokeObjectURL(url);
 }
 
+function MobileRowCard({ row, columns, actions, bulkActions, selected, setSelected }) {
+  return (
+    <article className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-gray-900">
+            {valueFor(row, columns[0]) || "Record"}
+          </p>
+          {columns[1] ? (
+            <p className="truncate text-xs text-gray-500">{valueFor(row, columns[1])}</p>
+          ) : null}
+        </div>
+        {bulkActions ? (
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={selected.includes(row.id)}
+            onChange={(event) => setSelected(event.target.checked ? [...selected, row.id] : selected.filter((id) => id !== row.id))}
+            aria-label="Select row"
+          />
+        ) : null}
+      </div>
+      <dl className="grid grid-cols-1 gap-2">
+        {columns.slice(2).map((column) => (
+          <div key={column.key} className="flex items-start justify-between gap-3 border-t border-gray-100 pt-2 text-sm">
+            <dt className="shrink-0 text-xs font-medium uppercase text-gray-400">{column.label}</dt>
+            <dd className="min-w-0 text-right text-gray-700">{column.render ? column.render(row) : valueFor(row, column)}</dd>
+          </div>
+        ))}
+      </dl>
+      {actions ? (
+        <div className="mt-3 flex flex-wrap gap-2 border-t border-gray-100 pt-3">
+          {actions(row).map((action) => (
+            <button key={action.label} className="rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-700" onClick={action.onClick}>
+              {action.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
 export default function DataTable({
   columns,
   rows,
@@ -108,7 +151,24 @@ export default function DataTable({
           </button>
         </div>
       </div>
-      <div className="overflow-x-auto">
+      <div className="grid gap-3 p-3 md:hidden">
+        {pagedRows.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500">{empty}</div>
+        ) : (
+          pagedRows.map((row) => (
+            <MobileRowCard
+              key={row.id || row.receipt_number || row.invoice_number}
+              row={row}
+              columns={columns}
+              actions={actions}
+              bulkActions={bulkActions}
+              selected={selected}
+              setSelected={setSelected}
+            />
+          ))
+        )}
+      </div>
+      <div className="hidden overflow-x-auto md:block">
         <table className="min-w-full divide-y divide-gray-200 text-sm">
           <thead className="bg-gray-50">
             <tr>

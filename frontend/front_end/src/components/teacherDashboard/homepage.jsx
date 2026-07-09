@@ -1,174 +1,166 @@
-import {
-  Clipboard,
-  Edit3,
-  Users,
-  Clock,
-  User,
-  X,
-  Calendar,
-  MapPin,
-} from "lucide-react";
-import { Settings, LogOut } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState, useEffect, useContext } from "react";
-import { useNavigate } from "react-router-dom";
-import { AuthContext } from "../../AuthProvider";
-import instance from "../../api/axiosInstance";
-export default function TeacherHomepage() {
-  const [teacher, setTeacher] = useState(null);
-  const tokens = JSON.parse(localStorage.getItem("tokens"));
-  const [teacherProfileDisplay, setTeacherProfileDisplay] = useState(false);
-  const navigate = useNavigate();
-  const { logout } = useContext(AuthContext);
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const res = await instance.get("/teacher/profile/");
+import { Bell, BookOpen, CalendarCheck, ClipboardCheck, FileText, GraduationCap, Plus, Users } from "lucide-react";
+import { useApiResource } from "../../hooks/useApiResource";
+import usePermissions from "../../hooks/usePermissions";
 
-        const data = res.data;
-        setTeacher(data);
-        console.log(data);
-      } catch (err) {
-        console.error(err);
-      }
-    };
+function Stat({ icon: Icon, label, value, helper, to }) {
+  const card = (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <div className="mb-3 inline-flex rounded-xl bg-cyan-50 p-2 text-cyan-700">
+        <Icon size={20} />
+      </div>
+      <p className="text-sm font-medium text-slate-500">{label}</p>
+      <p className="mt-1 text-2xl font-semibold text-slate-950">{value ?? 0}</p>
+      {helper ? <p className="mt-1 text-xs text-slate-500">{helper}</p> : null}
+    </div>
+  );
+  return to ? <Link to={to}>{card}</Link> : card;
+}
 
-    fetchProfile();
-  }, []);
-
-  if (!teacher) return <p>Loading...</p>;
-
-  const handleTeacherProfileDisplay = () => {
-    setTeacherProfileDisplay(!teacherProfileDisplay);
-  };
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
-  };
+function ListCard({ title, to, rows, empty, render }) {
   return (
-    <div>
-      <header className="w-full flex justify-between items-center px-6 py-4 bg-white shadow-md">
-        <h1 className="text-xl font-semibold text-gray-800">
-          {teacher.full_name}
-        </h1>
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="font-semibold text-slate-950">{title}</h3>
+        {to ? <Link className="text-sm font-medium text-cyan-700" to={to}>View all</Link> : null}
+      </div>
+      {rows?.length ? <div className="space-y-3">{rows.slice(0, 5).map(render)}</div> : <p className="rounded-xl border border-dashed border-slate-200 p-5 text-sm text-slate-500">{empty}</p>}
+    </section>
+  );
+}
 
-        <button
-          onClick={handleTeacherProfileDisplay}
-          className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition"
-        >
-          <User className="w-6 h-6 text-gray-600" />
-        </button>
+export default function TeacherHomepage() {
+  const { hasPermission } = usePermissions();
+  const profile = useApiResource("/teacher/profile/");
+  const dashboard = useApiResource("/v1/dashboards/teacher/");
+  const notifications = useApiResource("/v1/notifications/", { immediate: hasPermission("notifications.view") });
+  const teacher = profile.data || {};
+  const data = dashboard.data || {};
+  const name = teacher.full_name || "Teacher";
+  const quickActions = [
+    { label: "Open Classes", to: "/teacher/dashboard/classes", icon: BookOpen, permission: "batches.view" },
+    { label: "My Students", to: "/teacher/dashboard/students", icon: Users, permission: "students.view" },
+    { label: "Take Attendance", to: "/teacher/dashboard/attendance", icon: CalendarCheck, permission: "attendance.view" },
+    { label: "Create Assignment", to: "/teacher/dashboard/classes", icon: Plus, permission: "assessments.create" },
+    { label: "Assessments", to: "/teacher/dashboard/assessments", icon: ClipboardCheck, permission: "assessments.view" },
+  ].filter((item) => !item.permission || hasPermission(item.permission));
+  const activity = [
+    ...(data.upcoming_exams || []).map((item) => ({ label: item.title, helper: `Assessment / ${item.assessment_date}` })),
+    ...(data.todays_classes || []).map((item) => ({ label: item.name, helper: `Class / ${item.start_time || "-"}-${item.end_time || "-"}` })),
+  ].slice(0, 6);
 
-        <div
-          className={`fixed top-0 right-0 h-full w-80 bg-white shadow-xl transform transition-transform duration-300 z-50
-        ${teacherProfileDisplay ? "translate-x-0" : "translate-x-full"}`}
-        >
-          <div className="p-4">
-            {/* <h2 className="text-lg font-semibold text-gray-800">Profile</h2> */}
-            <button
-              onClick={handleTeacherProfileDisplay}
-              className="p-2 rounded-full hover:bg-gray-100"
-            >
-              <X className="w-5 h-5 text-gray-600" />
-            </button>
+  return (
+    <div className="space-y-5">
+      <section className="rounded-2xl bg-gradient-to-r from-cyan-700 to-slate-900 p-5 text-white shadow-sm sm:p-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm text-cyan-100">Welcome back</p>
+            <h2 className="mt-1 text-2xl font-semibold sm:text-3xl">{name}</h2>
+            <p className="mt-2 text-sm text-cyan-100">{teacher.subject || "Subject"} / {teacher.department || "Department"}</p>
           </div>
-
-          <div className="flex flex-col items-center mt-6">
-            <div className="w-30 h-30 rounded-full bg-gray-200 flex items-center justify-center text-4xl font-bold text-gray-600">
-              {teacher.full_name.charAt(0)}
-            </div>
-            <h3 className="mt-3 text-xl font-semibold text-gray-800">
-              {teacher.full_name}
-            </h3>
-            <div className="mt-2 text-sm text-gray-600 space-y-1 text-center">
-              <p className="truncate">{teacher.email_address}</p>
-              <p className="flex items-center justify-center gap-1">
-                📞 {teacher.phone_number}
-              </p>
-              <p className="flex items-center justify-center gap-1">
-                🏫 {teacher.department}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-6 px-4 space-y-2">
-            <button className="w-full flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg">
-              <Settings className="w-5 h-5 mr-2" />
-              Settings
-            </button>
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
-            >
-              <LogOut className="w-5 h-5 mr-2" />
-              Logout
-            </button>
-          </div>
-
-          <div className="absolute bottom-4 left-0 w-full text-center text-xs text-gray-400">
-            © {new Date().getFullYear()} Course Management
+          <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/15 text-2xl font-bold">
+            {name.charAt(0).toUpperCase()}
           </div>
         </div>
-      </header>
-      <div className="p-6">
-        <h1 className="text-xl font-bold mb-[30px]">My Classes</h1>
+      </section>
 
-        <div>
-          {teacher.classes.length > 0 ? (
-            <div>
-              {teacher.classes.map((classInfo) => (
-                <Link to={`classes/${classInfo.id}`}>
-                  <div
-                    className="cursor-pointer bg-white mb-2 shadow-md rounded-xl p-5 hover:shadow-xl transition transform hover:-translate-y-1"
-                    key={classInfo.id}
-                  >
-                    <div className="flex justify-between items-center">
-                      <h2 className="text-lg font-semibold text-gray-800">
-                        {classInfo.name}
-                      </h2>
-                      <span className="flex items-center text-sm text-gray-500">
-                        <MapPin className="w-4 h-4 mr-1" />
-                        Room{" "}
-                        {classInfo.roomOfClass_details && (
-                          <h2>{classInfo.roomOfClass_details.name}</h2>
-                        )}
-                      </span>
-                    </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <Stat icon={BookOpen} label="Assigned Classes" value={teacher.classes?.length || 0} helper="Active batches" to="/teacher/dashboard/classes" />
+        <Stat icon={CalendarCheck} label="Today's Attendance" value={data.todays_attendance || 0} helper="Records today" to="/teacher/dashboard/attendance" />
+        <Stat icon={ClipboardCheck} label="Pending Assessments" value={data.pending_assessments || 0} helper="Draft or scheduled" to="/teacher/dashboard/assessments" />
+        <Stat icon={GraduationCap} label="Upcoming Exams" value={data.upcoming_exams?.length || 0} helper="Scheduled ahead" to="/teacher/dashboard/assessments" />
+        <Stat icon={FileText} label="Assignments" value="Open" helper="Manage coursework" to="/teacher/dashboard/assignments" />
+      </div>
 
-                    {/* k */}
-
-                    <div className="mt-3 space-y-1 text-sm text-gray-500">
-                      <p className="flex items-center">
-                        <Clock className="w-4 h-4 mr-1" />
-                        {classInfo.start_time} – {classInfo.end_time}
-                      </p>
-                      <p className="flex items-center">
-                        <Calendar className="w-4 h-4 mr-1" />
-                        {classInfo.startDate} → {classInfo.endDate}
-                      </p>
-                    </div>
-
-                    {/* <div className="flex mt-4 space-x-3">
-                                        <button
-                                            // onClick={(e) => {
-                                            //     e.stopPropagation(); // prevent card click
-                                            //     alert(`Add Assignment for ${classInfo.name}`);
-                                            // }}
-
-                                            className="flex items-center gap-1 px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm hover:bg-green-200 transition"
-                                        >
-                                            <Clipboard className="w-4 h-4" /> Assignment
-                                        </button>
-                                         
-                                    </div> */}
-                  </div>
+      <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h3 className="mb-4 font-semibold text-slate-950 dark:text-white">Quick Actions</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {quickActions.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link key={item.label} to={item.to} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3 text-sm font-semibold text-slate-800 transition hover:border-cyan-200 hover:bg-cyan-50 dark:border-slate-800 dark:text-slate-100 dark:hover:bg-slate-800">
+                  <span className="rounded-xl bg-cyan-50 p-2 text-cyan-700"><Icon size={17} /></span>
+                  {item.label}
                 </Link>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-red-500">No classes assigned</p>
+              );
+            })}
+            {!quickActions.length ? <p className="text-sm text-slate-500">No quick actions available for your permissions.</p> : null}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h3 className="mb-4 font-semibold text-slate-950 dark:text-white">Calendar</h3>
+          <div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-800">
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" })}</p>
+            <p className="mt-1 text-4xl font-semibold text-slate-950 dark:text-white">{new Date().getDate()}</p>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{data.todays_classes?.length || 0} class(es) today</p>
+          </div>
+        </section>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <ListCard
+          title="Today's Classes"
+          to="/teacher/dashboard/classes"
+          rows={data.todays_classes || []}
+          empty="No classes scheduled today."
+          render={(row) => (
+            <Link key={row.id} to={`/teacher/dashboard/classes/${row.id}`} className="block rounded-xl border border-slate-200 p-3 hover:border-cyan-200 hover:bg-cyan-50/40">
+              <p className="font-semibold text-slate-900">{row.name}</p>
+              <p className="text-sm text-slate-500">{row.start_time || "-"} - {row.end_time || "-"}</p>
+            </Link>
           )}
-        </div>
+        />
+        <ListCard
+          title="Upcoming Assessments"
+          to="/teacher/dashboard/assessments"
+          rows={data.upcoming_exams || []}
+          empty="No upcoming assessments."
+          render={(row) => (
+            <div key={row.id} className="rounded-xl border border-slate-200 p-3">
+              <p className="font-semibold text-slate-900">{row.title}</p>
+              <p className="text-sm text-slate-500">{row.assessment_type} / {row.assessment_date}</p>
+            </div>
+          )}
+        />
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-3">
+        <ListCard
+          title="Performance Snapshot"
+          rows={data.student_performance || []}
+          empty="No assessment results yet."
+          render={(row, index) => (
+            <div key={`${row.assessment__title}-${index}`} className="flex items-center justify-between rounded-xl border border-slate-200 p-3">
+              <span className="font-medium text-slate-900">{row.assessment__title}</span>
+              <span className="text-sm font-semibold text-cyan-700">{Number(row.avg_percentage || 0).toFixed(1)}%</span>
+            </div>
+          )}
+        />
+        <ListCard
+          title="Notifications"
+          to={hasPermission("notifications.view") ? "/teacher/dashboard/notifications" : ""}
+          rows={notifications.results || []}
+          empty="No notifications."
+          render={(row) => (
+            <div key={row.id} className="rounded-xl border border-slate-200 p-3">
+              <p className="font-medium text-slate-900">{row.title}</p>
+              <p className="text-sm text-slate-500">{row.message}</p>
+            </div>
+          )}
+        />
+        <ListCard
+          title="Recent Activity"
+          rows={activity}
+          empty="No recent activity."
+          render={(row, index) => (
+            <div key={`${row.label}-${index}`} className="rounded-xl border border-slate-200 p-3">
+              <p className="font-medium text-slate-900">{row.label}</p>
+              <p className="text-sm text-slate-500">{row.helper}</p>
+            </div>
+          )}
+        />
       </div>
     </div>
   );

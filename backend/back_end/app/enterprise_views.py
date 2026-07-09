@@ -3,9 +3,10 @@ from html import escape
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import Avg, Count, F, Q, Sum
 from django.http import HttpResponse
 from django.utils import timezone
+from django.db.models.functions import TruncMonth
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -38,6 +39,7 @@ from .enterprise_services import (
     save_assessment_result,
 )
 from .services.billing_service import apply_invoice_discount, cancel_invoice, waive_invoice_balance
+from .services.notification_service import ensure_notification_backlog
 from .models import (
     Assessment,
     AssessmentResult,
@@ -207,10 +209,16 @@ class AssessmentViewSet(TenantScopedViewSet):
     search_fields = ["title", "description", "course__name", "teacher__full_name"]
     ordering_fields = ["assessment_date", "publish_date", "created_at", "title"]
     default_ordering = "-assessment_date"
-    filter_fields = ["course", "teacher", "assessment_type", "status"]
+    filter_fields = ["course", "batch", "teacher", "assessment_type", "status"]
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        date_from = self.request.query_params.get("date_from")
+        date_to = self.request.query_params.get("date_to")
+        if date_from:
+            queryset = queryset.filter(assessment_date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(assessment_date__lte=date_to)
         user = self.request.user
         role_slug = user.role.slug if user.role_id else ""
         if role_slug == "teacher" and hasattr(user, "teacher_profile"):
@@ -480,14 +488,19 @@ class PaymentViewSet(TenantScopedViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        payment = record_payment(
-            invoice=serializer.validated_data["invoice"],
-            amount_paid=serializer.validated_data["amount_paid"],
-            payment_method=serializer.validated_data["payment_method"],
-            notes=serializer.validated_data.get("notes", ""),
-            reference_number=serializer.validated_data.get("reference_number", ""),
-            received_by=self.request.user,
-        )
+        try:
+            payment = record_payment(
+                invoice=serializer.validated_data["invoice"],
+                amount_paid=serializer.validated_data["amount_paid"],
+                payment_method=serializer.validated_data["payment_method"],
+                notes=serializer.validated_data.get("notes", ""),
+                reference_number=serializer.validated_data.get("reference_number", ""),
+                received_by=self.request.user,
+            )
+        except ValueError as exc:
+            from rest_framework import serializers
+
+            raise serializers.ValidationError({"detail": str(exc)}) from exc
         serializer.instance = payment
 
     @action(detail=True, methods=["post"])
@@ -605,17 +618,10 @@ class InventoryTransactionViewSet(TenantScopedViewSet):
 class StationeryPurchaseViewSet(TenantScopedViewSet):
     rbac_resource = "stationery-purchases"
     serializer_class = StationeryPurchaseSerializer
-    queryset = StationeryPurchase.objects.select_related("tenant", "student", "created_by").prefetch_related("items", "items__item")
-    search_fields = ["receipt_number", "student__name"]
+    queryset = StationeryPurchase.objects.select_related("tenant", "created_by").prefetch_related("items", "items__item")
+    search_fields = ["receipt_number"]
     ordering_fields = ["date", "total", "created_at"]
-    filter_fields = ["student", "payment_status", "date"]
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        user = self.request.user
-        if user.role_id and user.role.slug == "student" and hasattr(user, "student_profile"):
-            queryset = queryset.filter(student=user.student_profile)
-        return queryset
+    filter_fields = ["payment_status", "date"]
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -623,7 +629,6 @@ class StationeryPurchaseViewSet(TenantScopedViewSet):
         try:
             purchase = create_stationery_purchase(
                 tenant=request.user.tenant,
-                student=serializer.validated_data["student"],
                 items=request.data.get("items", []),
                 discount=serializer.validated_data.get("discount", 0),
                 tax=serializer.validated_data.get("tax", 0),
@@ -680,6 +685,7 @@ class DashboardViewSet(viewsets.ViewSet):
 class ReportViewSet(viewsets.ViewSet):
     permission_classes = [HasRBACPermission]
     rbac_resource = "reports"
+    page_size = 25
 
     def csv_response(self, name, rows):
         response = HttpResponse(content_type="text/csv")
@@ -735,6 +741,12 @@ class ReportViewSet(viewsets.ViewSet):
         response["Content-Disposition"] = f'attachment; filename="{name}.pdf"'
         return response
 
+    def tenant_filter(self, model):
+        queryset = model.objects.all()
+        if not self.request.user.is_super_admin:
+            queryset = queryset.filter(tenant=self.request.user.tenant)
+        return queryset
+
     def filtered_dates(self, queryset, field="created_at"):
         start = self.request.query_params.get("start_date")
         end = self.request.query_params.get("end_date")
@@ -744,8 +756,56 @@ class ReportViewSet(viewsets.ViewSet):
             queryset = queryset.filter(**{f"{field}__lte": end})
         return queryset
 
-    def report(self, name, queryset, values):
-        rows = list(queryset.values(*values))
+    def apply_exact_filters(self, queryset, mapping):
+        for param, lookup in mapping.items():
+            value = self.request.query_params.get(param)
+            if value not in [None, ""]:
+                queryset = queryset.filter(**{lookup: value})
+        return queryset
+
+    def apply_text_filters(self, queryset, mapping):
+        for param, lookup in mapping.items():
+            value = self.request.query_params.get(param)
+            if value not in [None, ""]:
+                queryset = queryset.filter(**{f"{lookup}__icontains": value})
+        return queryset
+
+    def apply_search(self, queryset, fields):
+        search = self.request.query_params.get("search")
+        if not search:
+            return queryset
+        query = Q()
+        for field in fields:
+            query |= Q(**{f"{field}__icontains": search})
+        return queryset.filter(query)
+
+    def apply_ordering(self, queryset, allowed, default):
+        ordering = self.request.query_params.get("ordering") or default
+        if ordering.lstrip("-") in allowed:
+            return queryset.order_by(ordering)
+        return queryset.order_by(default)
+
+    def paginate_rows(self, rows):
+        page = max(int(self.request.query_params.get("page", 1) or 1), 1)
+        size = min(max(int(self.request.query_params.get("page_size", self.page_size) or self.page_size), 1), 100)
+        start = (page - 1) * size
+        return page, size, rows[start:start + size]
+
+    def decimalize(self, value):
+        return float(value or 0)
+
+    def chart(self, queryset, date_field, amount_field=None, count_field="id"):
+        grouped = queryset.annotate(period=TruncMonth(date_field)).values("period")
+        if amount_field:
+            grouped = grouped.annotate(value=Sum(amount_field))
+        else:
+            grouped = grouped.annotate(value=Count(count_field))
+        return [
+            {"label": row["period"].strftime("%Y-%m") if row["period"] else "Unknown", "value": self.decimalize(row["value"])}
+            for row in grouped.order_by("period")
+        ]
+
+    def report(self, name, queryset, rows, summary=None, charts=None, last_generated=None):
         export = self.request.query_params.get("export")
         if export == "csv":
             return self.csv_response(name, rows)
@@ -753,47 +813,143 @@ class ReportViewSet(viewsets.ViewSet):
             return self.excel_response(name, rows)
         if export == "pdf":
             return self.pdf_response(name, rows)
-        return Response({"count": len(rows), "results": rows})
+        page, page_size, paged = self.paginate_rows(rows)
+        return Response({
+            "count": len(rows),
+            "page": page,
+            "page_size": page_size,
+            "summary": summary or {},
+            "charts": charts or {},
+            "last_generated": last_generated or timezone.now(),
+            "results": paged,
+        })
 
     @action(detail=False, methods=["get"])
     def attendance(self, request):
-        queryset = self.filtered_dates(Attendance.objects.filter(tenant=request.user.tenant), "date")
-        return self.report("attendance", queryset, ["date", "student__name", "class_fk__name", "is_present"])
+        queryset = self.tenant_filter(Attendance).select_related("student", "class_fk", "course", "teacher")
+        queryset = self.filtered_dates(queryset, "date")
+        queryset = self.apply_text_filters(queryset, {
+            "course": "course__name",
+            "class": "class_fk__name",
+            "batch": "class_fk__name",
+            "teacher": "teacher__full_name",
+            "student": "student__name",
+        })
+        queryset = self.apply_exact_filters(queryset, {"status": "status"})
+        queryset = self.apply_search(queryset, ["student__name", "class_fk__name", "course__name", "teacher__full_name", "status"])
+        queryset = self.apply_ordering(queryset, {"date", "student__name", "class_fk__name", "status"}, "-date")
+        rows = list(queryset.values("id", "date", "student__name", "class_fk__name", "course__name", "teacher__full_name", "status", "is_present"))
+        total = queryset.count()
+        present = queryset.filter(is_present=True).count()
+        summary = {"total_records": total, "present": present, "absent": total - present, "attendance_percentage": round((present / total) * 100, 2) if total else 0}
+        charts = {"attendance_trends": self.chart(queryset, "date")}
+        return self.report("attendance", queryset, rows, summary, charts, queryset.order_by("-updated_at").values_list("updated_at", flat=True).first())
 
     @action(detail=False, methods=["get"])
     def assessments(self, request):
-        queryset = AssessmentResult.objects.filter(tenant=request.user.tenant)
-        return self.report("assessments", queryset, ["assessment__title", "student__name", "marks_obtained", "percentage", "grade", "is_passed"])
+        queryset = self.tenant_filter(AssessmentResult).select_related("assessment", "student", "course", "batch", "teacher")
+        queryset = self.filtered_dates(queryset, "assessment__assessment_date")
+        queryset = self.apply_text_filters(queryset, {"course": "course__name", "teacher": "teacher__full_name", "student": "student__name"})
+        queryset = self.apply_exact_filters(queryset, {"assessment_type": "assessment__assessment_type"})
+        queryset = self.apply_search(queryset, ["assessment__title", "student__name", "course__name", "teacher__full_name", "grade"])
+        queryset = self.apply_ordering(queryset, {"assessment__assessment_date", "student__name", "percentage", "grade"}, "-assessment__assessment_date")
+        rows = list(queryset.values("id", "assessment__title", "assessment__assessment_date", "assessment__assessment_type", "student__name", "course__name", "teacher__full_name", "marks_obtained", "percentage", "grade", "is_passed"))
+        total = queryset.count()
+        passed = queryset.filter(is_passed=True).count()
+        summary = {"results": total, "passed": passed, "failed": total - passed, "average_percentage": round(self.decimalize(queryset.aggregate(value=Avg("percentage"))["value"]), 2)}
+        charts = {"assessment_trends": self.chart(queryset, "assessment__assessment_date")}
+        return self.report("assessments", queryset, rows, summary, charts, queryset.order_by("-updated_at").values_list("updated_at", flat=True).first())
 
     @action(detail=False, methods=["get"])
     def fees(self, request):
-        queryset = Invoice.objects.filter(tenant=request.user.tenant)
-        return self.report("fees", queryset, ["invoice_number", "student__name", "month", "year", "final_amount", "paid_amount", "balance", "status"])
+        queryset = self.tenant_filter(Invoice).select_related("student", "course", "batch", "enrollment")
+        queryset = self.filtered_dates(queryset, "due_date")
+        queryset = self.apply_text_filters(queryset, {
+            "student": "student__name",
+            "course": "course__name",
+            "batch": "batch__name",
+            "fee_plan": "enrollment__billing_profile__fee_plan__course__name",
+        })
+        queryset = self.apply_exact_filters(queryset, {"payment_status": "status"})
+        queryset = self.apply_search(queryset, ["invoice_number", "student__name", "course__name", "batch__name", "status"])
+        queryset = self.apply_ordering(queryset, {"due_date", "student__name", "final_amount", "paid_amount", "balance", "status"}, "-due_date")
+        rows = list(queryset.values("id", "invoice_number", "student__name", "course__name", "batch__name", "billing_month", "billing_year", "due_date", "final_amount", "paid_amount", "balance", "status"))
+        summary = {
+            "invoices": queryset.count(),
+            "expected": queryset.aggregate(value=Sum("final_amount"))["value"] or 0,
+            "collected": queryset.aggregate(value=Sum("paid_amount"))["value"] or 0,
+            "pending": queryset.aggregate(value=Sum("balance"))["value"] or 0,
+        }
+        charts = {"fee_collection": self.chart(queryset, "due_date", "paid_amount")}
+        return self.report("fees", queryset, rows, summary, charts, queryset.order_by("-updated_at").values_list("updated_at", flat=True).first())
 
     @action(detail=False, methods=["get"])
     def revenue(self, request):
-        queryset = Payment.objects.filter(tenant=request.user.tenant)
-        return self.report("revenue", queryset, ["receipt_number", "invoice__student__name", "payment_date", "payment_method", "amount_paid"])
+        queryset = self.tenant_filter(Payment).select_related("invoice", "student", "received_by")
+        queryset = self.filtered_dates(queryset, "payment_date")
+        queryset = self.apply_text_filters(queryset, {"source": "invoice__course__name", "cashier": "received_by__username"})
+        queryset = self.apply_exact_filters(queryset, {"payment_method": "payment_method"})
+        queryset = self.apply_search(queryset, ["receipt_number", "student__name", "invoice__invoice_number", "payment_method", "received_by__username"])
+        queryset = self.apply_ordering(queryset, {"payment_date", "amount_paid", "payment_method", "receipt_number"}, "-payment_date")
+        rows = list(queryset.values("id", "receipt_number", "invoice__invoice_number", "student__name", "payment_date", "payment_method", "amount_paid", "received_by__username"))
+        summary = {"payments": queryset.count(), "total_revenue": queryset.aggregate(value=Sum("amount_paid"))["value"] or 0, "average_payment": round(self.decimalize(queryset.aggregate(value=Avg("amount_paid"))["value"]), 2)}
+        charts = {"monthly_revenue": self.chart(queryset, "payment_date", "amount_paid")}
+        if request.query_params.get("grouping") == "yearly":
+            charts["yearly_revenue"] = list(queryset.values("payment_date__year").annotate(value=Sum("amount_paid")).order_by("payment_date__year"))
+        return self.report("revenue", queryset, rows, summary, charts, queryset.order_by("-updated_at").values_list("updated_at", flat=True).first())
 
     @action(detail=False, methods=["get"])
     def students(self, request):
-        queryset = Students.objects.filter(tenant=request.user.tenant)
-        return self.report("students", queryset, ["name", "f_name", "role_number", "parent_mobile_number", "enrollment_date"])
+        queryset = self.tenant_filter(Students).prefetch_related("enrollments", "enrollments__course")
+        queryset = self.filtered_dates(queryset, "enrollment_date")
+        queryset = self.apply_text_filters(queryset, {"course": "enrollments__course__name", "batch": "enrollments__batch__name"})
+        queryset = self.apply_exact_filters(queryset, {"status": "is_active"})
+        queryset = self.apply_search(queryset, ["name", "f_name", "role_number", "parent_mobile_number"])
+        queryset = self.apply_ordering(queryset, {"name", "role_number", "enrollment_date", "is_active"}, "-enrollment_date").distinct()
+        rows = list(queryset.values("id", "name", "f_name", "role_number", "parent_mobile_number", "enrollment_date", "is_active"))
+        summary = {"students": queryset.count(), "active": queryset.filter(is_active=True).count(), "archived": queryset.filter(is_archived=True).count()}
+        charts = {"student_enrollment": self.chart(queryset, "enrollment_date")}
+        return self.report("students", queryset, rows, summary, charts, queryset.order_by("-enrollment_date").values_list("enrollment_date", flat=True).first())
 
     @action(detail=False, methods=["get"])
     def teachers(self, request):
-        queryset = Teachers.objects.filter(tenant=request.user.tenant)
-        return self.report("teachers", queryset, ["full_name", "email_address", "phone_number", "subject", "department"])
+        queryset = self.tenant_filter(Teachers).select_related("user")
+        queryset = self.apply_text_filters(queryset, {"department": "department", "subject": "subject"})
+        queryset = self.apply_exact_filters(queryset, {"employment_status": "is_active"})
+        queryset = self.filtered_dates(queryset, "user__date_joined")
+        queryset = self.apply_search(queryset, ["full_name", "email_address", "phone_number", "subject", "department"])
+        queryset = self.apply_ordering(queryset, {"full_name", "department", "subject", "user__date_joined"}, "full_name")
+        rows = list(queryset.values("id", "full_name", "email_address", "phone_number", "subject", "department", "is_active", "user__date_joined"))
+        summary = {"teachers": queryset.count(), "active": queryset.filter(is_active=True).count(), "inactive": queryset.filter(is_active=False).count(), "departments": queryset.values("department").distinct().count()}
+        charts = {"teacher_departments": list(queryset.values("department").annotate(value=Count("id")).order_by("department"))}
+        return self.report("teachers", queryset, rows, summary, charts, queryset.order_by("-user__date_joined").values_list("user__date_joined", flat=True).first())
 
     @action(detail=False, methods=["get"])
     def inventory(self, request):
-        queryset = StationeryItem.objects.filter(tenant=request.user.tenant)
-        return self.report("inventory", queryset, ["item_name", "sku", "category", "quantity", "minimum_stock", "status", "selling_price"])
+        queryset = self.tenant_filter(StationeryItem)
+        queryset = self.apply_exact_filters(queryset, {"category": "category"})
+        queryset = self.apply_text_filters(queryset, {"supplier": "supplier"})
+        if request.query_params.get("low_stock") in ["1", "true", "yes"]:
+            queryset = queryset.filter(Q(status=StationeryItem.Status.LOW_STOCK) | Q(quantity__lte=F("minimum_stock")))
+        queryset = self.apply_search(queryset, ["item_name", "sku", "barcode", "category", "supplier", "status"])
+        queryset = self.apply_ordering(queryset, {"item_name", "quantity", "minimum_stock", "status", "selling_price"}, "item_name")
+        rows = list(queryset.values("id", "item_name", "sku", "category", "quantity", "minimum_stock", "status", "supplier", "selling_price"))
+        summary = {"items": queryset.count(), "low_stock": queryset.filter(status=StationeryItem.Status.LOW_STOCK).count(), "out_of_stock": queryset.filter(status=StationeryItem.Status.OUT_OF_STOCK).count(), "stock_value": sum(self.decimalize(row["quantity"]) * self.decimalize(row["selling_price"]) for row in rows)}
+        charts = {"stock_distribution": list(queryset.values("category").annotate(value=Sum("quantity")).order_by("category"))}
+        return self.report("inventory", queryset, rows, summary, charts, queryset.order_by("-updated_at").values_list("updated_at", flat=True).first())
 
     @action(detail=False, methods=["get"], url_path="stationery-sales")
     def stationery_sales(self, request):
-        queryset = StationeryPurchase.objects.filter(tenant=request.user.tenant)
-        return self.report("stationery-sales", queryset, ["receipt_number", "student__name", "date", "total", "payment_status"])
+        queryset = self.tenant_filter(StationeryPurchase).select_related("created_by").prefetch_related("items", "items__item")
+        queryset = self.filtered_dates(queryset, "date")
+        queryset = self.apply_text_filters(queryset, {"product": "items__item__item_name", "cashier": "created_by__username"})
+        queryset = self.apply_exact_filters(queryset, {"payment_method": "payment_status"})
+        queryset = self.apply_search(queryset, ["receipt_number", "payment_status", "created_by__username", "items__item__item_name"])
+        queryset = self.apply_ordering(queryset, {"date", "total", "payment_status", "receipt_number"}, "-date").distinct()
+        rows = list(queryset.values("id", "receipt_number", "date", "total", "payment_status", "created_by__username"))
+        summary = {"sales": queryset.count(), "total_sales": queryset.aggregate(value=Sum("total"))["value"] or 0, "paid_sales": queryset.filter(payment_status=StationeryPurchase.PaymentStatus.PAID).count()}
+        charts = {"stationery_sales_trends": self.chart(queryset, "date", "total")}
+        return self.report("stationery-sales", queryset, rows, summary, charts, queryset.order_by("-updated_at").values_list("updated_at", flat=True).first())
 
 
 class NotificationViewSet(TenantScopedViewSet):
@@ -805,6 +961,7 @@ class NotificationViewSet(TenantScopedViewSet):
     filter_fields = ["notification_type", "is_read"]
 
     def get_queryset(self):
+        ensure_notification_backlog(self.request.user)
         return super().get_queryset().filter(recipient=self.request.user)
 
     @action(detail=True, methods=["post"], url_path="mark-read")
@@ -814,3 +971,9 @@ class NotificationViewSet(TenantScopedViewSet):
         notification.read_at = timezone.now()
         notification.save(update_fields=["is_read", "read_at", "updated_at"])
         return Response(self.get_serializer(notification).data)
+
+    @action(detail=False, methods=["post"], url_path="mark-all-read")
+    def mark_all_read(self, request):
+        now = timezone.now()
+        count = self.get_queryset().filter(is_read=False).update(is_read=True, read_at=now, updated_at=now)
+        return Response({"detail": "Notifications marked as read.", "count": count})

@@ -6,7 +6,7 @@ from django.utils.http import urlsafe_base64_decode
 from rest_framework import serializers
 
 from .models import Role, RBACPermission, Tenant
-from .rbac import allowed_menus, effective_permission_codes, grouped_permissions
+from .rbac import allowed_menus, effective_permission_codes, expand_legacy_classes_codes, grouped_permissions
 from .serializers import StudentsSerializer, TeachersSerializer, TenantSerializer
 
 User = get_user_model()
@@ -47,7 +47,7 @@ class RoleSerializer(serializers.ModelSerializer):
         }
 
     def get_permission_codes(self, obj):
-        return list(obj.permissions.values_list("code", flat=True))
+        return sorted(expand_legacy_classes_codes(obj.permissions.filter(is_active=True).values_list("code", flat=True)))
 
 
 class UserManagementSerializer(serializers.ModelSerializer):
