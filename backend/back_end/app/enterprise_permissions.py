@@ -22,6 +22,7 @@ RESOURCE_MODULES = {
     "permissions": "roles",
     "courses": "courses",
     "batches": "batches",
+    "online-page": "online-page",
 }
 
 ACTION_PERMISSIONS = {
@@ -46,6 +47,7 @@ ACTION_PERMISSIONS = {
     "approve": "approve",
     "lock": "manage",
     "publish": "publish",
+    "unpublish": "publish",
     "close": "update",
     "archive": "update",
     "duplicate": "create",
@@ -75,6 +77,8 @@ ACTION_PERMISSIONS = {
     "inventory": "view",
     "stationery_sales": "view",
     "mark_read": "update",
+    "hide": "update",
+    "spam": "update",
     "activate": "activate",
     "deactivate": "deactivate",
     "reset_password": "reset_password",
@@ -83,6 +87,16 @@ ACTION_PERMISSIONS = {
     "assign_users": "assign_users",
     "matrix": "view",
     "set_permission": "manage",
+}
+
+ACTION_METHOD_PERMISSIONS = {
+    "current": {
+        "get": "view",
+        "head": "view",
+        "options": "view",
+        "patch": "update",
+        "put": "update",
+    },
 }
 
 
@@ -98,7 +112,8 @@ class HasRBACPermission(BasePermission):
         resource = getattr(view, "rbac_resource", None)
         action = getattr(view, "action", None) or getattr(request, "method", "").lower()
         module = RESOURCE_MODULES.get(resource, resource)
-        permission_action = ACTION_PERMISSIONS.get(action)
+        method = getattr(request, "method", "").lower()
+        permission_action = ACTION_METHOD_PERMISSIONS.get(action, {}).get(method) or ACTION_PERMISSIONS.get(action)
         if not module or not permission_action:
             return False
         return can(request.user, f"{module}.{permission_action}")

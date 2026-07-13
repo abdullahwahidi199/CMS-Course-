@@ -1,4 +1,4 @@
-import { useContext, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   Bell,
@@ -10,9 +10,12 @@ import {
   GraduationCap,
   LayoutDashboard,
   LogOut,
+  Megaphone,
   Menu,
   Search,
   Settings,
+  Moon,
+  Sun,
   User,
   Users,
   X,
@@ -21,14 +24,16 @@ import { AuthContext } from "../../AuthProvider";
 import usePermissions from "../../hooks/usePermissions";
 
 const navItems = [
-  { label: "Dashboard", path: "/teacher/dashboard", icon: LayoutDashboard, end: true, permission: "dashboard.view" },
+  { label: "Dashboard", path: "/teacher/dashboard", icon: LayoutDashboard, end: true },
   { label: "My Profile", path: "/teacher/dashboard/profile", icon: User },
   { label: "My Classes", path: "/teacher/dashboard/classes", icon: BookOpen, permission: "batches.view" },
   { label: "My Students", path: "/teacher/dashboard/students", icon: Users, permission: "students.view" },
   { label: "Attendance", path: "/teacher/dashboard/attendance", icon: CalendarCheck, permission: "attendance.view" },
   { label: "Marks", path: "/teacher/dashboard/marks", icon: GraduationCap, permission: "assessments.view" },
   { label: "Assessments", path: "/teacher/dashboard/assessments", icon: ClipboardCheck, permission: "assessments.view" },
+  { label: "Exams", path: "/teacher/dashboard/exams", icon: GraduationCap, permission: "assessments.view" },
   { label: "Assignments", path: "/teacher/dashboard/assignments", icon: FileText, permission: "assessments.view" },
+  { label: "Announcements", path: "/teacher/dashboard/announcements", icon: Megaphone },
   { label: "Notifications", path: "/teacher/dashboard/notifications", icon: Bell, permission: "notifications.view" },
   { label: "Timetable", path: "/teacher/dashboard/timetable", icon: CalendarDays, permission: "batches.view" },
   { label: "Settings", path: "/teacher/dashboard/settings", icon: Settings },
@@ -99,9 +104,15 @@ export default function TeacherDashboard() {
   const { hasPermission } = usePermissions();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("teacher-dark-mode") === "true");
   const name = user?.profile?.name || user?.first_name || user?.username || "Teacher";
   const items = useMemo(() => navItems.filter((item) => !item.permission || hasPermission(item.permission)), [hasPermission]);
   const title = pageTitles[location.pathname] || "Teacher Portal";
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+    localStorage.setItem("teacher-dark-mode", String(darkMode));
+  }, [darkMode]);
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-950 dark:bg-slate-950 dark:text-slate-100">
@@ -151,6 +162,14 @@ export default function TeacherDashboard() {
                 <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-cyan-600" />
               </NavLink>
             ) : null}
+            <button
+              type="button"
+              className="rounded-xl p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+              onClick={() => setDarkMode((value) => !value)}
+              aria-label="Toggle dark mode"
+            >
+              {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
             <div className="hidden h-9 w-9 place-items-center rounded-full bg-cyan-700 text-sm font-bold text-white sm:grid">
               {name.charAt(0).toUpperCase()}
             </div>

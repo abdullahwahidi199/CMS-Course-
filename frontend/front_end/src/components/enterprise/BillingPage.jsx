@@ -10,6 +10,7 @@ const current = new Date();
 const initialPlan = {
   course: "",
   batch: "",
+  billing_cycle: "monthly",
   monthly_fee: "",
   registration_fee: "0",
   material_fee: "0",
@@ -24,6 +25,10 @@ const initialPlan = {
 
 function money(value) {
   return Number(value || 0).toFixed(2);
+}
+
+function billingCycleLabel(value) {
+  return value === "batch" ? "Batch / One-time" : "Monthly";
 }
 
 function Field({ label, children }) {
@@ -90,6 +95,8 @@ export default function BillingPage() {
   const [paymentForm, setPaymentForm] = useState({
     invoice: "",
     amount_paid: "",
+    discount_amount: "",
+    discount_notes: "",
     payment_method: "cash",
     reference_number: "",
     notes: "",
@@ -209,6 +216,8 @@ export default function BillingPage() {
       setPaymentForm({
         invoice: "",
         amount_paid: "",
+        discount_amount: "",
+        discount_notes: "",
         payment_method: "cash",
         reference_number: "",
         notes: "",
@@ -256,6 +265,11 @@ export default function BillingPage() {
       render: (row) => money(row.final_amount),
     },
     {
+      key: "discount",
+      label: "Discount",
+      render: (row) => money(row.discount),
+    },
+    {
       key: "paid_amount",
       label: "Paid",
       render: (row) => money(row.paid_amount),
@@ -270,6 +284,11 @@ export default function BillingPage() {
     { key: "course_name", label: "Course" },
     { key: "payment_date", label: "Date" },
     { key: "payment_method", label: "Method" },
+    {
+      key: "invoice_discount",
+      label: "Discounts",
+      render: (row) => money(row.invoice_discount),
+    },
     {
       key: "amount_paid",
       label: "Amount",
@@ -297,8 +316,13 @@ export default function BillingPage() {
       render: (row) => row.batch_name || "Default",
     },
     {
+      key: "billing_cycle",
+      label: "Cycle",
+      render: (row) => billingCycleLabel(row.billing_cycle),
+    },
+    {
       key: "monthly_fee",
-      label: "Monthly",
+      label: "Fee",
       render: (row) => money(row.monthly_fee),
     },
     {
@@ -342,6 +366,11 @@ export default function BillingPage() {
           title="Collected"
           value={money(cards.collected_revenue ?? localSummary.collected)}
           accent="border-emerald-500"
+        />
+        <StatCard
+          title="Discounts"
+          value={money(cards.discounts_given)}
+          accent="border-violet-500"
         />
         <StatCard
           title="Outstanding"
@@ -469,6 +498,8 @@ export default function BillingPage() {
                   setPaymentForm({
                     ...paymentForm,
                     invoice: e.target.value,
+                    discount_amount: "",
+                    discount_notes: "",
                     amount_paid:
                       invoiceRows.find(
                         (row) => String(row.id) === e.target.value,
@@ -491,18 +522,61 @@ export default function BillingPage() {
                   ))}
               </Select>
             </Field>
+            <Field label="Discount">
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                max={selectedInvoice?.balance || undefined}
+                value={paymentForm.discount_amount}
+                onChange={(e) => {
+                  const discount = Number(e.target.value || 0);
+                  const adjustedBalance = selectedInvoice
+                    ? Math.max(Number(selectedInvoice.balance || 0) - discount, 0)
+                    : "";
+                  setPaymentForm({
+                    ...paymentForm,
+                    discount_amount: e.target.value,
+                    amount_paid:
+                      selectedInvoice &&
+                      Number(paymentForm.amount_paid || 0) > adjustedBalance
+                        ? adjustedBalance
+                        : paymentForm.amount_paid,
+                  });
+                }}
+              />
+            </Field>
             <Field label="Amount">
               <Input
                 required
                 type="number"
                 min="0.01"
                 step="0.01"
-                max={selectedInvoice?.balance || undefined}
+                max={
+                  selectedInvoice
+                    ? Math.max(
+                        Number(selectedInvoice.balance || 0) -
+                          Number(paymentForm.discount_amount || 0),
+                        0,
+                      )
+                    : undefined
+                }
                 value={paymentForm.amount_paid}
                 onChange={(e) =>
                   setPaymentForm({
                     ...paymentForm,
                     amount_paid: e.target.value,
+                  })
+                }
+              />
+            </Field>
+            <Field label="Discount Notes">
+              <Input
+                value={paymentForm.discount_notes}
+                onChange={(e) =>
+                  setPaymentForm({
+                    ...paymentForm,
+                    discount_notes: e.target.value,
                   })
                 }
               />
@@ -716,7 +790,24 @@ export default function BillingPage() {
                     ))}
                 </Select>
               </Field>
-              <Field label="Monthly Fee">
+              <Field label="Billing Cycle">
+                <Select
+                  value={planForm.billing_cycle}
+                  onChange={(e) =>
+                    setPlanForm({ ...planForm, billing_cycle: e.target.value })
+                  }
+                >
+                  <option value="monthly">Monthly per student</option>
+                  <option value="batch">Batch / one-time fee</option>
+                </Select>
+              </Field>
+              <Field
+                label={
+                  planForm.billing_cycle === "batch"
+                    ? "Batch Fee"
+                    : "Monthly Fee"
+                }
+              >
                 <Input
                   required
                   type="number"
@@ -852,8 +943,13 @@ export default function BillingPage() {
               { key: "course_name", label: "Course" },
               { key: "batch_name", label: "Batch" },
               {
+                key: "billing_cycle",
+                label: "Cycle",
+                render: (row) => billingCycleLabel(row.billing_cycle),
+              },
+              {
                 key: "monthly_fee",
-                label: "Monthly",
+                label: "Fee",
                 render: (row) => money(row.monthly_fee),
               },
               {

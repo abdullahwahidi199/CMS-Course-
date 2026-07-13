@@ -208,6 +208,10 @@ class PaymentSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="invoice.student.name", read_only=True)
     course_name = serializers.CharField(source="invoice.course.name", read_only=True)
     batch_name = serializers.CharField(source="invoice.batch.name", read_only=True)
+    invoice_discount = serializers.DecimalField(source="invoice.discount", max_digits=10, decimal_places=2, read_only=True)
+    invoice_balance = serializers.DecimalField(source="invoice.balance", max_digits=10, decimal_places=2, read_only=True)
+    discount_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, write_only=True, default=Decimal("0.00"))
+    discount_notes = serializers.CharField(required=False, allow_blank=True, write_only=True)
 
     class Meta:
         model = Payment
@@ -222,11 +226,17 @@ class PaymentSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         invoice = attrs.get("invoice", getattr(self.instance, "invoice", None))
         amount = attrs.get("amount_paid", getattr(self.instance, "amount_paid", None))
+        discount = attrs.get("discount_amount", Decimal("0.00"))
         if invoice and amount is not None:
             if invoice.status == Invoice.Status.CANCELLED:
                 raise serializers.ValidationError({"invoice": "Payments cannot be recorded against a cancelled invoice."})
-            if Decimal(str(amount)) > Decimal(str(invoice.balance or 0)):
-                raise serializers.ValidationError({"amount_paid": "Payment amount cannot be greater than the invoice balance."})
+            if Decimal(str(discount or 0)) < 0:
+                raise serializers.ValidationError({"discount_amount": "Discount cannot be negative."})
+            adjusted_balance = Decimal(str(invoice.balance or 0)) - Decimal(str(discount or 0))
+            if adjusted_balance < 0:
+                raise serializers.ValidationError({"discount_amount": "Discount cannot be greater than the invoice balance."})
+            if Decimal(str(amount)) > adjusted_balance:
+                raise serializers.ValidationError({"amount_paid": "Payment amount cannot be greater than the invoice balance after discount."})
         return attrs
 
 

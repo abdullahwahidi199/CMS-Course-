@@ -1,7 +1,7 @@
 import { useEffect, useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../AuthProvider";
-import { Eye, EyeOff } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, GraduationCap, Lock, ShieldCheck, User } from "lucide-react";
 import instance from "../api/axiosInstance";
 import { firstAccessiblePath, firstAccessibleTeacherPath } from "../routes/appRoutes";
 
@@ -10,6 +10,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const { login, user, permissions, initializing } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -28,6 +29,8 @@ export default function LoginPage() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setSubmitting(true);
+    setError(null);
 
     try {
       const tokenRes = await instance.post("/token/", {
@@ -60,96 +63,151 @@ export default function LoginPage() {
       if (err.response?.status === 401 || err.response?.status === 400) {
         setError("Invalid username or password");
       } else {
-        alert("Something went wrong during login.");
+        setError("Something went wrong during login.");
       }
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-200">
-      <form
-        onSubmit={handleLogin}
-        className="bg-white p-10 rounded-xl shadow-md w-96"
-      >
-        <h2 className="text-3xl font-semibold text-center text-gray-800 mb-8">
-          Welcome Back
-        </h2>
-
-        <div className="relative mb-8">
-          <input
-            type="text"
-            id="username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="peer w-full border-b-2 border-gray-300 bg-transparent py-2 px-1 text-gray-800 placeholder-transparent focus:outline-none focus:border-blue-500"
-            placeholder="Username"
-            required
+    <main className="min-h-screen bg-slate-100 text-slate-950">
+      <div className="grid min-h-screen lg:grid-cols-[1.05fr_0.95fr]">
+        <section className="relative hidden overflow-hidden bg-slate-950 lg:block">
+          <img
+            src="/school-image.png"
+            alt="School campus"
+            className="absolute inset-0 h-full w-full object-cover opacity-60"
           />
-          <label
-            htmlFor="username"
-            className={`absolute left-1 text-gray-500 text-base transition-all duration-200
-              ${
-                username
-                  ? "-top-3 text-sm text-blue-600"
-                  : "top-2 text-gray-400 text-base"
-              }
-              peer-focus:-top-3 peer-focus:text-sm peer-focus:text-blue-600`}
-          >
-            Username
-          </label>
-        </div>
+          <div className="absolute inset-0 bg-slate-950/55" />
+          <div className="relative flex h-full flex-col justify-between p-12 text-white">
+            <div className="inline-flex w-fit items-center gap-3 rounded-md bg-white/10 px-4 py-3 backdrop-blur">
+              <span className="flex h-10 w-10 items-center justify-center rounded-md bg-cyan-500 text-white">
+                <GraduationCap size={22} />
+              </span>
+              <div>
+                <p className="text-sm font-semibold">Education Management</p>
+                <p className="text-xs text-slate-200">Secure administration portal</p>
+              </div>
+            </div>
 
-        <div className="relative mb-10">
-          <input
-            type={showPassword ? "text" : "password"}
-            id="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="peer w-full border-b-2 border-gray-300 bg-transparent py-2 px-1 text-gray-800 placeholder-transparent focus:outline-none focus:border-blue-500"
-            placeholder="Password"
-            required
-          />
-          <label
-            htmlFor="password"
-            className={`absolute left-1 text-gray-500 text-base transition-all duration-200
-              ${
-                password
-                  ? "-top-3 text-sm text-blue-600"
-                  : "top-2 text-gray-400 text-base"
-              }
-              peer-focus:-top-3 peer-focus:text-sm peer-focus:text-blue-600`}
-          >
-            Password
-          </label>
+            <div className="max-w-xl">
+              <p className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-cyan-200">Welcome back</p>
+              <h1 className="text-5xl font-semibold leading-tight">Run your center with clarity and control.</h1>
+              <p className="mt-5 max-w-lg text-base leading-7 text-slate-200">
+                Access attendance, students, billing, reports, and public page tools from one focused workspace.
+              </p>
+            </div>
 
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-1 top-2.5 text-gray-500 hover:text-blue-600"
-          >
-            {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-          </button>
-        </div>
-        <label className="mb-5 flex items-center gap-2 text-sm text-gray-600">
-          <input
-            type="checkbox"
-            checked={remember}
-            onChange={(event) => setRemember(event.target.checked)}
-          />
-          Remember me
-        </label>
+            <div className="grid grid-cols-3 gap-3 text-sm">
+              {["Attendance", "Billing", "Reports"].map((item) => (
+                <div key={item} className="rounded-md border border-white/15 bg-white/10 p-4 backdrop-blur">
+                  <p className="font-semibold">{item}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
 
-        <button
-          type="submit"
-          className="w-full py-2.5 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 transition"
-        >
-          Login
-        </button>
+        <section className="flex items-center justify-center px-5 py-10 sm:px-8">
+          <div className="w-full max-w-md">
+            <div className="mb-8 flex items-center gap-3 lg:hidden">
+              <span className="flex h-11 w-11 items-center justify-center rounded-md bg-cyan-700 text-white">
+                <GraduationCap size={23} />
+              </span>
+              <div>
+                <p className="font-semibold text-slate-950">Education Management</p>
+                <p className="text-sm text-slate-500">Secure administration portal</p>
+              </div>
+            </div>
 
-        {error && (
-          <p className="text-red-600 text-center mt-3 text-sm">{error}</p>
-        )}
-      </form>
-    </div>
+            <form onSubmit={handleLogin} className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+              <div className="mb-8">
+                <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-md bg-cyan-50 text-cyan-700">
+                  <ShieldCheck size={24} />
+                </div>
+                <h2 className="text-2xl font-semibold text-slate-950">Sign in to your account</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Your session remains active for one day unless you log out.
+                </p>
+              </div>
+
+              {error ? (
+                <div className="mb-5 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                  {error}
+                </div>
+              ) : null}
+
+              <div className="space-y-5">
+                <label className="block text-sm">
+                  <span className="mb-2 block font-medium text-slate-700">Username</span>
+                  <span className="relative block">
+                    <User className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input
+                      type="text"
+                      id="username"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      className="h-11 w-full rounded-md border border-slate-200 bg-white pl-10 pr-3 text-sm text-slate-900 outline-none transition focus:border-cyan-700 focus:ring-4 focus:ring-cyan-50"
+                      placeholder="Enter username"
+                      autoComplete="username"
+                      required
+                    />
+                  </span>
+                </label>
+
+                <label className="block text-sm">
+                  <span className="mb-2 block font-medium text-slate-700">Password</span>
+                  <span className="relative block">
+                    <Lock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      id="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="h-11 w-full rounded-md border border-slate-200 bg-white pl-10 pr-11 text-sm text-slate-900 outline-none transition focus:border-cyan-700 focus:ring-4 focus:ring-cyan-50"
+                      placeholder="Enter password"
+                      autoComplete="current-password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-cyan-700"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </span>
+                </label>
+              </div>
+
+              <label className="mt-5 flex items-center gap-3 text-sm font-medium text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(event) => setRemember(event.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-cyan-700 focus:ring-cyan-700"
+                />
+                Keep me signed in on this device
+              </label>
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-cyan-700 px-4 text-sm font-semibold text-white transition hover:bg-cyan-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+              >
+                {submitting ? "Signing in..." : "Sign in"}
+                {!submitting ? <ArrowRight size={18} /> : null}
+              </button>
+            </form>
+
+            <p className="mt-6 text-center text-xs text-slate-500">
+              Protected access for administrators, teachers, and students.
+            </p>
+          </div>
+        </section>
+      </div>
+    </main>
   );
 }

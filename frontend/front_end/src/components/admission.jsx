@@ -30,6 +30,12 @@ const emptyAdmission = {
 
 const steps = ["Profile", "Account", "Enrollment", "Review"];
 
+function normalizeList(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.results)) return data.results;
+  return [];
+}
+
 function inputClass() {
   return "w-full rounded-md border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cyan-600";
 }
@@ -63,9 +69,9 @@ export default function Admission() {
           instance.get("/courses/"),
           instance.get("/classes/"),
         ]);
-      setStudents(studentsResponse.data);
-      setCourses(coursesResponse.data);
-      setBatches(batchesResponse.data);
+      setStudents(normalizeList(studentsResponse.data));
+      setCourses(normalizeList(coursesResponse.data));
+      setBatches(normalizeList(batchesResponse.data));
     } catch (err) {
       setError(
         err.response?.data?.detail ||

@@ -47,6 +47,18 @@ def write_ledger_entry(*, tenant, student, transaction_type, description, debit=
 
 
 def resolve_fee_plan(enrollment):
+    if enrollment.batch_id:
+        batch_plan = FeePlan.objects.filter(
+            tenant=enrollment.tenant,
+            batch=enrollment.batch,
+            is_active=True,
+        ).order_by("-created_at").first()
+        if batch_plan:
+            return batch_plan
+
+    if not enrollment.course_id:
+        return None
+
     batch_plan = FeePlan.objects.filter(
         tenant=enrollment.tenant,
         course=enrollment.course,
@@ -180,6 +192,17 @@ def invoice_totals(profile, month, year):
     }
 
 
+def should_skip_invoice_for_cycle(profile, month, year):
+    if profile.billing_cycle != FeePlan.BillingCycle.BATCH:
+        return False
+    return (
+        Invoice.objects.filter(enrollment=profile.enrollment)
+        .exclude(billing_month=month, billing_year=year)
+        .exclude(status=Invoice.Status.CANCELLED)
+        .exists()
+    )
+
+
 def update_unpaid_invoice_totals(invoice, totals, due_date, user=None):
     if invoice.status == Invoice.Status.CANCELLED or money(invoice.paid_amount) > 0:
         return False
@@ -256,6 +279,8 @@ def generate_invoice_for_profile(*, profile, month, year, user=None, due_date=No
     if profile.billing_start_date and (profile.billing_start_date.year, profile.billing_start_date.month) > (year, month):
         return None, False
     if profile.billing_end_date and (profile.billing_end_date.year, profile.billing_end_date.month) < (year, month):
+        return None, False
+    if should_skip_invoice_for_cycle(profile, month, year):
         return None, False
 
     enrollment = profile.enrollment
@@ -363,13 +388,35 @@ def generate_monthly_invoices(*, tenant, month, year, due_date=None, user=None, 
 
     return created_invoices
 @transaction.atomic
-def record_payment(*, invoice, amount_paid, payment_method, received_by, notes="", reference_number=""):
+def record_payment(*, invoice, amount_paid, payment_method, received_by, notes="", reference_number="", discount_amount=0, discount_notes=""):
     invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
-    amount = Decimal(str(amount_paid))
+    amount = money(amount_paid)
+    discount = money(discount_amount)
     if amount <= 0:
         raise ValueError("Payment amount must be greater than zero.")
+    if discount < 0:
+        raise ValueError("Discount cannot be negative.")
     if invoice.status == Invoice.Status.CANCELLED:
         raise ValueError("Payments cannot be recorded against a cancelled invoice.")
+    if discount > money(invoice.balance):
+        raise ValueError("Discount cannot be greater than the invoice balance.")
+    if discount > 0:
+        invoice.discount = money(invoice.discount) + discount
+        invoice.final_amount = money(invoice.final_amount) - discount
+        invoice.total_amount = invoice.final_amount
+        invoice.balance = money(invoice.balance) - discount
+        invoice.status = Invoice.Status.PAID if invoice.balance <= 0 else invoice.status
+        invoice.save(update_fields=["discount", "final_amount", "total_amount", "balance", "status", "updated_at"])
+        write_ledger_entry(
+            tenant=invoice.tenant,
+            student=invoice.student,
+            invoice=invoice,
+            transaction_type=StudentLedgerEntry.TransactionType.DISCOUNT_APPLIED,
+            description=discount_notes or f"Discount applied to {invoice.invoice_number}",
+            credit=discount,
+            reference_number=invoice.invoice_number,
+            user=received_by,
+        )
     if amount > money(invoice.balance):
         raise ValueError("Payment amount cannot be greater than the invoice balance.")
 

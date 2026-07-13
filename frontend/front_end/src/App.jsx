@@ -2,10 +2,12 @@ import "./App.css";
 import "./forTailwind.css";
 import { lazy, Suspense } from "react";
 import {
+  Navigate,
   Route,
   createBrowserRouter,
   createRoutesFromElements,
   RouterProvider,
+  useParams,
 } from "react-router-dom";
 import RootLayout from "./rootLayout";
 import HomePage from "./components/homePage";
@@ -63,6 +65,8 @@ import RoleManagementPage from "./components/enterprise/RoleManagementPage";
 import StudentManagementPage from "./components/students/StudentManagementPage";
 import CourseManagementPage from "./components/academic/CourseManagementPage";
 import BatchManagementPage from "./components/academic/BatchManagementPage";
+import OnlinePageManager from "./components/onlinePage/OnlinePageManager";
+import PublicSite from "./components/publicSite/PublicSite";
 
 const TeacherDashboard = lazy(() => import("./components/teacherDashboard/TeacherDashboard"));
 const TeacherHomepage = lazy(() => import("./components/teacherDashboard/homepage"));
@@ -73,7 +77,9 @@ const TeacherClassesPage = lazy(() => import("./components/teacherDashboard/page
 const TeacherAttendancePage = lazy(() => import("./components/teacherDashboard/pages/AttendancePage"));
 const TeacherMarksPage = lazy(() => import("./components/teacherDashboard/pages/MarksPage"));
 const TeacherAssessmentsPage = lazy(() => import("./components/teacherDashboard/pages/AssessmentsPage"));
+const TeacherExamsPage = lazy(() => import("./components/teacherDashboard/pages/ExamsPage"));
 const TeacherAssignmentsPage = lazy(() => import("./components/teacherDashboard/pages/AssignmentsPage"));
+const TeacherAnnouncementsPage = lazy(() => import("./components/teacherDashboard/pages/AnnouncementsPage"));
 const TeacherNotificationsPage = lazy(() => import("./components/teacherDashboard/pages/NotificationsPage"));
 const TeacherSettingsPage = lazy(() => import("./components/teacherDashboard/pages/SettingsPage"));
 const TeacherStudentsPage = lazy(() => import("./components/teacherDashboard/pages/StudentsPage"));
@@ -83,11 +89,25 @@ function TeacherFallback() {
   return <div className="min-h-screen bg-slate-100 p-6 text-sm text-slate-500">Loading teacher portal...</div>;
 }
 
+function NavigateToAdminStationery() {
+  const { section } = useParams();
+  return <Navigate to={`/admin/dashboard/stationery/${section || "dashboard"}`} replace />;
+}
+
 function App() {
   const router = createBrowserRouter(
     createRoutesFromElements(
       <Route path="/" element={<RootLayout />}>
         <Route index element={<Login />} />
+        <Route path="site/:tenantSlug" element={<PublicSite page="home" />} />
+        <Route path="site/:tenantSlug/about" element={<PublicSite page="about" />} />
+        <Route path="site/:tenantSlug/courses" element={<PublicSite page="courses" />} />
+        <Route path="site/:tenantSlug/news" element={<PublicSite page="news" />} />
+        <Route path="site/:tenantSlug/news/:postSlug" element={<PublicSite page="news-detail" />} />
+        <Route path="site/:tenantSlug/events" element={<PublicSite page="events" />} />
+        <Route path="site/:tenantSlug/events/:eventSlug" element={<PublicSite page="event-detail" />} />
+        <Route path="site/:tenantSlug/achievements" element={<PublicSite page="achievements" />} />
+        <Route path="site/:tenantSlug/contact" element={<PublicSite page="contact" />} />
 
         <Route
           path="super-admin/dashboard"
@@ -155,7 +175,7 @@ function App() {
             }
           />
           <Route
-            path="stationery"
+            path="stationery/*"
             element={
               <ProtectedRoute permission="stationery.view">
                 <StationeryPage />
@@ -239,6 +259,14 @@ function App() {
             element={
               <ProtectedRoute permission="notifications.view">
                 <NotificationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="online-page"
+            element={
+              <ProtectedRoute permission="online-page.view">
+                <OnlinePageManager />
               </ProtectedRoute>
             }
           />
@@ -379,6 +407,8 @@ function App() {
             }
           />
         </Route>
+        <Route path="stationery" element={<Navigate to="/admin/dashboard/stationery/dashboard" replace />} />
+        <Route path="stationery/:section" element={<NavigateToAdminStationery />} />
         <Route
           path="teacher/dashboard"
           element={
@@ -391,6 +421,8 @@ function App() {
         >
           <Route index element={<TeacherHomepage />} />
           <Route path="profile" element={<TeacherProfilePage />} />
+          <Route path="my-students" element={<Navigate to="/teacher/dashboard/students" replace />} />
+          <Route path="student" element={<Navigate to="/teacher/dashboard/students" replace />} />
           <Route
             path="classes"
             element={
@@ -432,12 +464,24 @@ function App() {
             }
           />
           <Route
+            path="exams"
+            element={
+              <ProtectedRoute permission="assessments.view">
+                <TeacherExamsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="assignments"
             element={
               <ProtectedRoute permission="assessments.view">
                 <TeacherAssignmentsPage />
               </ProtectedRoute>
             }
+          />
+          <Route
+            path="announcements"
+            element={<TeacherAnnouncementsPage />}
           />
           <Route
             path="assignment/:id"
@@ -464,6 +508,7 @@ function App() {
             }
           />
           <Route path="settings" element={<TeacherSettingsPage />} />
+          <Route path="*" element={<Navigate to="/teacher/dashboard" replace />} />
         </Route>
 
         <Route

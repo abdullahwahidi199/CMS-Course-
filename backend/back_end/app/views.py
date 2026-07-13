@@ -11,7 +11,7 @@ from .models import PromotionHistory
 from .serializers import AdmissionSerializer, PromotionCreateSerializer, PromotionHistorySerializer, StudentsSerializer,TeachersSerializer,EventSerializer,ClassesSerializer,AttendanceSerializer,AttendanceSessionSerializer,StaffSerializer,ExpensesSerializer,ExpenseCategorySerializer,BudgetSerializer,RecurringExpenseSerializer,RoomSerializer,CourseSerializer,EnrollmentSerializer
 from rest_framework.generics import RetrieveUpdateDestroyAPIView
 from rest_framework.views import APIView
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from datetime import date
 from decimal import Decimal
 import json
@@ -28,6 +28,7 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser,AllowAny
 from .models import Marks,Assignment,Submission
 from .serializers import MarksSerializer,AssignmentSerializer,SubmissionSerializer,TenantSerializer
 from rest_framework import viewsets, status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
@@ -53,6 +54,15 @@ def method_permission(resource, request):
 
 def get_tenant(request):
     return request.user.tenant
+
+def is_teacher_user(user):
+    return bool(user and user.role_id and user.role.slug == "teacher" and hasattr(user, "teacher_profile"))
+
+def teacher_classes_queryset(user):
+    return Classes.objects.filter(tenant=user.tenant, teachers=user.teacher_profile)
+
+def user_can_access_class(user, batch):
+    return not is_teacher_user(user) or batch.teachers.filter(id=user.teacher_profile.id).exists()
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -455,9 +465,12 @@ class classDetailsView(RetrieveUpdateDestroyAPIView):
     permission_classes = [HasRBACPermission]
     rbac_resource = "batches"
     def get_queryset(self):
-        return Classes.objects.filter(
+        queryset = Classes.objects.filter(
             tenant=self.request.user.tenant
         )
+        if is_teacher_user(self.request.user):
+            queryset = queryset.filter(teachers=self.request.user.teacher_profile)
+        return queryset
     serializer_class=ClassesSerializer
     lookup_field='id'
 
@@ -608,6 +621,8 @@ def classApi(request):
     "attendances",
     "assignments"
 )
+        if is_teacher_user(request.user):
+            classes = classes.filter(teachers=request.user.teacher_profile)
         serializer=ClassesSerializer(classes,many=True)
         return Response(serializer.data)
     if request.method=='POST':
@@ -639,6 +654,8 @@ def Mark_attendance_view(request,class_id):
             id=class_id,
             tenant=tenant
         )
+        if not user_can_access_class(request.user, class_instance):
+            return Response({"detail": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN)
     except Classes.DoesNotExist:
         return Response({'error':'Could not find the class'},status=status.HTTP_404_NOT_FOUND)
     
@@ -687,6 +704,8 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = AttendanceSession.objects.filter(tenant=self.request.user.tenant).select_related("batch", "course", "teacher").prefetch_related("records")
+        if is_teacher_user(self.request.user):
+            queryset = queryset.filter(batch__teachers=self.request.user.teacher_profile)
         batch = self.request.query_params.get("batch")
         course = self.request.query_params.get("course")
         teacher = self.request.query_params.get("teacher")
@@ -706,13 +725,18 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         batch = serializer.validated_data["batch"]
-        serializer.save(tenant=self.request.user.tenant, course=serializer.validated_data.get("course") or batch.course, created_by=self.request.user)
+        if not user_can_access_class(self.request.user, batch):
+            raise PermissionDenied("You are not assigned to this class.")
+        teacher = self.request.user.teacher_profile if is_teacher_user(self.request.user) else serializer.validated_data.get("teacher")
+        serializer.save(tenant=self.request.user.tenant, course=serializer.validated_data.get("course") or batch.course, teacher=teacher, created_by=self.request.user)
 
     @action(detail=False, methods=["post"])
     def open(self, request):
         batch = get_object_or_404(Classes, id=request.data.get("batch"), tenant=request.user.tenant)
-        teacher = None
-        if request.data.get("teacher"):
+        if not user_can_access_class(request.user, batch):
+            return Response({"detail": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN)
+        teacher = request.user.teacher_profile if is_teacher_user(request.user) else None
+        if request.data.get("teacher") and not teacher:
             teacher = get_object_or_404(Teachers, id=request.data.get("teacher"), tenant=request.user.tenant)
         session, _ = AttendanceSession.objects.update_or_create(
             tenant=request.user.tenant,
@@ -789,6 +813,8 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
     def dashboard(self, request):
         today = timezone.localdate()
         queryset = Attendance.objects.filter(tenant=request.user.tenant, date=today)
+        if is_teacher_user(request.user):
+            queryset = queryset.filter(class_fk__teachers=request.user.teacher_profile)
         total = queryset.count()
         present = queryset.filter(status=Attendance.Status.PRESENT).count()
         absent = queryset.filter(status=Attendance.Status.ABSENT).count()
@@ -825,6 +851,8 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = Attendance.objects.filter(tenant=self.request.user.tenant).select_related("student", "enrollment", "course", "class_fk", "teacher", "marked_by")
+        if is_teacher_user(self.request.user):
+            queryset = queryset.filter(class_fk__teachers=self.request.user.teacher_profile)
         for param, field in [("student", "student_id"), ("batch", "class_fk_id"), ("course", "course_id"), ("teacher", "teacher_id"), ("session", "session_id")]:
             value = self.request.query_params.get(param)
             if value:
@@ -860,6 +888,9 @@ class StudentByClassView(APIView):
     rbac_resource = "students"
 
     def get(self,request,class_id):
+        batch = get_object_or_404(Classes, id=class_id, tenant=request.user.tenant)
+        if not user_can_access_class(request.user, batch):
+            return Response({"detail": "You do not have permission to access this class."}, status=status.HTTP_403_FORBIDDEN)
         students = Students.objects.filter(
     tenant=request.user.tenant,
     enrollments__batch_id=class_id,
@@ -872,9 +903,10 @@ class StudentByClassView(APIView):
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser,FormParser])
 def eventsApi(request):
-    denied = require_permission(request.user, "dashboard.view")
-    if denied:
-        return denied
+    if request.method != "GET" or not is_teacher_user(request.user):
+        denied = require_permission(request.user, "dashboard.view")
+        if denied:
+            return denied
     if request.method=='GET':
         events = Events.objects.filter(
     tenant=request.user.tenant
@@ -1181,9 +1213,12 @@ class TimetableListView(generics.ListCreateAPIView):
     rbac_resource = "batches"
 
     def get_queryset(self):
-        return Classes.objects.filter(
+        queryset = Classes.objects.filter(
             tenant=self.request.user.tenant
         ).order_by("start_time")
+        if is_teacher_user(self.request.user):
+            queryset = queryset.filter(teachers=self.request.user.teacher_profile)
+        return queryset
     serializer_class = ClassesSerializer
 
 @api_view(['GET'])
@@ -1475,6 +1510,7 @@ def student_fees_payload(user):
     return {
         "summary": {
             "total_invoiced": sum(float(invoice.final_amount or 0) for invoice in invoices),
+            "total_discounts": sum(float(invoice.discount or 0) for invoice in invoices),
             "total_paid": sum(float(invoice.paid_amount or 0) for invoice in invoices),
             "outstanding": sum(float(invoice.balance or 0) for invoice in invoices),
             "paid_invoices": len([invoice for invoice in invoices if invoice.status == Invoice.Status.PAID]),
@@ -1490,6 +1526,8 @@ def student_fees_payload(user):
                 "month": invoice.billing_month or invoice.month,
                 "year": invoice.billing_year or invoice.year,
                 "due_date": invoice.due_date,
+                "amount": float(invoice.amount or 0),
+                "discount": float(invoice.discount or 0),
                 "final_amount": float(invoice.final_amount),
                 "paid_amount": float(invoice.paid_amount),
                 "balance": float(invoice.balance),
@@ -1608,6 +1646,7 @@ def student_dashboard_payload(user):
 
     fee_summary = {
         "total_invoiced": sum(float(invoice.final_amount or 0) for invoice in invoices),
+        "total_discounts": sum(float(invoice.discount or 0) for invoice in invoices),
         "total_paid": sum(float(invoice.paid_amount or 0) for invoice in invoices),
         "outstanding": sum(float(invoice.balance or 0) for invoice in invoices),
         "paid_invoices": len([invoice for invoice in invoices if invoice.status == Invoice.Status.PAID]),
@@ -1973,9 +2012,12 @@ class MarksViewSet(viewsets.ModelViewSet):
     permission_classes = [HasRBACPermission]
     rbac_resource = "assessments"
     def get_queryset(self):
-        return Marks.objects.filter(
+        queryset = Marks.objects.filter(
             tenant=self.request.user.tenant
         ).select_related("student")
+        if is_teacher_user(self.request.user):
+            queryset = queryset.filter(student__enrollments__batch__teachers=self.request.user.teacher_profile).distinct()
+        return queryset
     serializer_class = MarksSerializer
 
     def create(self, request, *args, **kwargs):
@@ -2044,7 +2086,10 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
     serializer_class = EnrollmentSerializer
 
     def get_queryset(self):
-        return Enrollment.objects.filter(tenant=self.request.user.tenant).select_related("student", "course", "batch")
+        queryset = Enrollment.objects.filter(tenant=self.request.user.tenant).select_related("student", "course", "batch")
+        if is_teacher_user(self.request.user):
+            queryset = queryset.filter(batch__teachers=self.request.user.teacher_profile)
+        return queryset
 
     def perform_create(self, serializer):
         enrollment = create_enrollment(
@@ -2094,6 +2139,7 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
 class AssignmetViewSet(viewsets.ModelViewSet):
     permission_classes = [HasRBACPermission]
     rbac_resource = "assessments"
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     serializer_class = AssignmentSerializer
 
@@ -2105,6 +2151,8 @@ class AssignmetViewSet(viewsets.ModelViewSet):
         ).prefetch_related(
             "submissions"
         )
+        if is_teacher_user(self.request.user):
+            queryset = queryset.filter(class_assigned__teachers=self.request.user.teacher_profile)
 
         class_id = self.request.query_params.get("class_id")
 
@@ -2117,6 +2165,9 @@ class AssignmetViewSet(viewsets.ModelViewSet):
         try:
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
+            class_assigned = serializer.validated_data["class_assigned"]
+            if not user_can_access_class(request.user, class_assigned):
+                return Response({"detail": "You do not have permission to create assignments for this class."}, status=status.HTTP_403_FORBIDDEN)
             assignment = serializer.save(
             tenant=request.user.tenant,
             created_by=request.user
@@ -2143,18 +2194,28 @@ class AssignmetViewSet(viewsets.ModelViewSet):
             traceback.print_exc()
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    def destroy(self, request, *args, **kwargs):
+        assignment = self.get_object()
+        assignment.submissions.all().delete()
+        assignment.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 class SubmissionViewSet(viewsets.ModelViewSet):
     permission_classes = [HasRBACPermission]
     rbac_resource = "assessments"
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     serializer_class = SubmissionSerializer
     def get_queryset(self):
-        return Submission.objects.filter(
+        queryset = Submission.objects.filter(
             tenant=self.request.user.tenant
         ).select_related(
             "assignment",
             "student"
         )
+        if is_teacher_user(self.request.user):
+            queryset = queryset.filter(assignment__class_assigned__teachers=self.request.user.teacher_profile)
+        return queryset
 
     @action(detail=False, methods=["patch"])
     def bulk_update(self, request):
@@ -2173,6 +2234,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
     id=submission_id,
     tenant=request.user.tenant
 )
+                    if is_teacher_user(request.user) and not user_can_access_class(request.user, submission.assignment.class_assigned):
+                        continue
                     submission.marks_obtained = item.get("marks_obtained")
                     submission.suggestion = item.get("suggestion", "")
                     submission.status = item.get("status", "pending")
@@ -2184,6 +2247,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
             # If new submission (id is None but student is provided)
             elif student_id and assignment_id:
+                assignment = get_object_or_404(Assignment, id=assignment_id, tenant=request.user.tenant)
+                if is_teacher_user(request.user) and not user_can_access_class(request.user, assignment.class_assigned):
+                    continue
                 submission, created = Submission.objects.get_or_create(
     tenant=request.user.tenant,
     student_id=student_id,

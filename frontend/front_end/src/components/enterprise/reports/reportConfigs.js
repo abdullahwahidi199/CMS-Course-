@@ -116,6 +116,8 @@ export const reportConfigs = {
     chartTitle: "Fee Collection Chart",
     stats: [
       { key: "invoices", label: "Invoices", accent: "border-sky-500" },
+      { key: "gross", label: "Gross", accent: "border-cyan-600", format: "money" },
+      { key: "discounts", label: "Discounts", accent: "border-violet-500", format: "money" },
       { key: "expected", label: "Expected", accent: "border-indigo-500", format: "money" },
       { key: "collected", label: "Collected", accent: "border-emerald-500", format: "money" },
       { key: "pending", label: "Pending", accent: "border-orange-500", format: "money" },
@@ -132,6 +134,8 @@ export const reportConfigs = {
       { key: "student__name", label: "Student" },
       { key: "course__name", label: "Course" },
       { key: "due_date", label: "Due Date" },
+      { key: "amount", label: "Gross" },
+      { key: "discount", label: "Discount" },
       { key: "final_amount", label: "Amount" },
       { key: "paid_amount", label: "Paid" },
       { key: "balance", label: "Balance" },
@@ -148,6 +152,7 @@ export const reportConfigs = {
     stats: [
       { key: "payments", label: "Payments", accent: "border-sky-500" },
       { key: "total_revenue", label: "Revenue", accent: "border-emerald-500", format: "money" },
+      { key: "discounts", label: "Discounts", accent: "border-violet-500", format: "money" },
       { key: "average_payment", label: "Average Payment", accent: "border-cyan-600", format: "money" },
     ],
     filters: [
@@ -163,6 +168,7 @@ export const reportConfigs = {
       { key: "payment_date", label: "Date" },
       { key: "payment_method", label: "Method" },
       { key: "amount_paid", label: "Amount" },
+      { key: "invoice__discount", label: "Invoice Discount" },
       { key: "received_by__username", label: "Cashier" },
     ],
   },

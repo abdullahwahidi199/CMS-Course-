@@ -31,6 +31,9 @@ export function clearAuthStorage() {
 }
 
 instance.interceptors.request.use((config) => {
+  if (config.data instanceof FormData) {
+    delete config.headers["Content-Type"];
+  }
   const tokens = getStoredTokens() || JSON.parse(sessionStorage.getItem("tokens") || "null");
   if (tokens?.access) {
     config.headers.Authorization = `Bearer ${tokens.access}`;

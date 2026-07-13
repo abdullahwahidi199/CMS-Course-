@@ -138,7 +138,7 @@ def generate_monthly_invoices(*, tenant, month, year, due_date=None, user=None, 
 
 
 @transaction.atomic
-def record_payment(*, invoice, amount_paid, payment_method, received_by, notes="", reference_number=""):
+def record_payment(*, invoice, amount_paid, payment_method, received_by, notes="", reference_number="", discount_amount=0, discount_notes=""):
     from .services.billing_service import record_payment as record
 
     return record(
@@ -148,6 +148,8 @@ def record_payment(*, invoice, amount_paid, payment_method, received_by, notes="
         received_by=received_by,
         notes=notes,
         reference_number=reference_number,
+        discount_amount=discount_amount,
+        discount_notes=discount_notes,
     )
 
 

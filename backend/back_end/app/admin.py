@@ -12,10 +12,17 @@ from .models import (
     Invoice,
     Notification,
     Payment,
+    PublicAchievement,
+    PublicAnnouncement,
+    PublicAnnouncementComment,
+    PublicCourseProgram,
+    PublicEvent,
+    PublicInquiry,
     StationeryItem,
     StationeryPurchase,
     StationeryPurchaseItem,
     StudentLedgerEntry,
+    TenantPublicSiteSettings,
     RBACPermission,
     Role,
 )
@@ -122,3 +129,52 @@ class NotificationAdmin(admin.ModelAdmin):
     list_display = ("recipient", "notification_type", "title", "is_read", "created_at")
     list_filter = ("notification_type", "is_read")
     search_fields = ("recipient__username", "title", "message")
+
+
+@admin.register(TenantPublicSiteSettings)
+class TenantPublicSiteSettingsAdmin(admin.ModelAdmin):
+    list_display = ("tenant", "center_name", "is_published", "updated_at")
+    list_filter = ("is_published",)
+    search_fields = ("tenant__name", "center_name", "hero_title")
+
+
+@admin.register(PublicCourseProgram)
+class PublicCourseProgramAdmin(admin.ModelAdmin):
+    list_display = ("title", "tenant", "is_published", "order", "updated_at")
+    list_filter = ("is_published",)
+    search_fields = ("title", "tenant__name", "summary")
+
+
+@admin.register(PublicAnnouncement)
+class PublicAnnouncementAdmin(admin.ModelAdmin):
+    list_display = ("title", "tenant", "category", "is_published", "is_featured", "published_at")
+    list_filter = ("is_published", "is_featured", "category")
+    search_fields = ("title", "tenant__name", "summary", "body", "category")
+
+
+@admin.register(PublicAnnouncementComment)
+class PublicAnnouncementCommentAdmin(admin.ModelAdmin):
+    list_display = ("visitor_name", "announcement", "tenant", "status", "is_spam", "created_at")
+    list_filter = ("status", "is_spam", "created_at")
+    search_fields = ("visitor_name", "visitor_email", "body", "announcement__title", "tenant__name")
+
+
+@admin.register(PublicEvent)
+class PublicEventAdmin(admin.ModelAdmin):
+    list_display = ("title", "tenant", "starts_at", "is_published", "location")
+    list_filter = ("is_published", "starts_at")
+    search_fields = ("title", "tenant__name", "summary", "location")
+
+
+@admin.register(PublicAchievement)
+class PublicAchievementAdmin(admin.ModelAdmin):
+    list_display = ("title", "tenant", "metric_value", "achieved_on", "is_published")
+    list_filter = ("is_published",)
+    search_fields = ("title", "tenant__name", "summary", "description")
+
+
+@admin.register(PublicInquiry)
+class PublicInquiryAdmin(admin.ModelAdmin):
+    list_display = ("visitor_name", "tenant", "source", "status", "created_at")
+    list_filter = ("source", "status")
+    search_fields = ("visitor_name", "visitor_email", "visitor_phone", "subject", "message")

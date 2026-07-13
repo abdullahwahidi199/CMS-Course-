@@ -25,6 +25,7 @@ MODULE_ACTIONS = {
     "roles": ["view", "create", "update", "delete", "clone", "assign_users", "manage"],
     "settings": ["view", "update", "manage"],
     "notifications": ["view", "update", "delete", "manage"],
+    "online-page": ["view", "create", "update", "delete", "publish", "approve", "manage"],
 }
 
 SYSTEM_ROLE_PERMISSIONS = {
@@ -99,6 +100,7 @@ MENU_DEFINITIONS = [
     {"label": "Stationery", "path": "stationery", "permission": "stationery.view"},
     {"label": "Reports", "path": "reports", "permission": "reports.view"},
     {"label": "Notifications", "path": "notifications", "permission": "notifications.view"},
+    {"label": "Online Page", "path": "online-page", "permission": "online-page.view"},
     {"label": "Admission", "path": "addmission", "permission": "students.create"},
     {"label": "Courses", "path": "courses", "permission": "courses.view"},
     {"label": "Batches", "path": "classes", "permission": "batches.view"},
@@ -179,13 +181,29 @@ def seed_permissions_and_roles(tenant=None, user=None, migrate_legacy=True):
     return permissions
 
 
+def sync_wildcard_role_permissions(permissions, tenant=None):
+    wildcard_slugs = [slugify(role_name) for role_name, codes in SYSTEM_ROLE_PERMISSIONS.items() if codes == ["*"]]
+    roles = Role.objects.filter(slug__in=wildcard_slugs)
+    if tenant is not None:
+        roles = roles.filter(tenant=tenant)
+    for role in roles:
+        existing_ids = set(role.permissions.values_list("id", flat=True))
+        missing = [permission for permission in permissions.values() if permission.id not in existing_ids]
+        if missing:
+            role.permissions.add(*missing)
+
+
 def seed_missing_permissions(tenant=None, user=None):
     if permissions_are_seeded():
-        return {
+        permissions = {
             permission.code: permission
             for permission in RBACPermission.objects.filter(code__in=expected_permission_codes())
         }
-    return seed_permissions_and_roles(tenant, user, migrate_legacy=False)
+        sync_wildcard_role_permissions(permissions, tenant)
+        return permissions
+    permissions = seed_permissions_and_roles(tenant, user, migrate_legacy=False)
+    sync_wildcard_role_permissions(permissions, tenant)
+    return permissions
 
 
 def ensure_user_role(user):

@@ -136,6 +136,10 @@ function StudentDetailsDrawer({ detail, loading, error, onClose }) {
     (total, row) => total + Number(row.paid_amount || 0),
     0,
   );
+  const totalDiscounts = detail.invoices.reduce(
+    (total, row) => total + Number(row.discount || 0),
+    0,
+  );
   const outstanding = detail.invoices.reduce(
     (total, row) => total + Number(row.balance || 0),
     0,
@@ -221,6 +225,10 @@ function StudentDetailsDrawer({ detail, loading, error, onClose }) {
                     {money(totalCharges)}
                   </p>
                   <p>
+                    <span className="font-medium">Discounts:</span>{" "}
+                    {money(totalDiscounts)}
+                  </p>
+                  <p>
                     <span className="font-medium">Paid:</span>{" "}
                     {money(totalPaid)}
                   </p>
@@ -280,6 +288,11 @@ function StudentDetailsDrawer({ detail, loading, error, onClose }) {
                       key: "final_amount",
                       label: "Amount",
                       render: (row) => money(row.final_amount),
+                    },
+                    {
+                      key: "discount",
+                      label: "Discount",
+                      render: (row) => money(row.discount),
                     },
                     {
                       key: "paid_amount",

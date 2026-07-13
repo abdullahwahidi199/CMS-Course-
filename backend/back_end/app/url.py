@@ -29,6 +29,7 @@ urlpatterns=[
     path('auth/forgot-password/', forgot_password, name='auth-forgot-password'),
     path('auth/reset-password/', reset_password, name='auth-reset-password'),
     path('auth/logout/', logout, name='auth-logout'),
+    path('public/', include('app.public_urls')),
     path('v1/', include('app.enterprise_urls')),
     path('admissions/', AdmissionView.as_view(), name='admissions'),
     path('promotions/', PromotionView.as_view(), name='promotions'),

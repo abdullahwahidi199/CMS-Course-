@@ -9,6 +9,8 @@ from django.utils import timezone
 from django.db.models.functions import TruncMonth
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .enterprise_permissions import HasRBACPermission
@@ -463,12 +465,13 @@ class InvoiceViewSet(TenantScopedViewSet):
         return Response({
             "expected_monthly_revenue": queryset.filter(billing_year=today.year, billing_month=today.month).aggregate(total=Sum("final_amount"))["total"] or 0,
             "collected_revenue": payments.aggregate(total=Sum("amount_paid"))["total"] or 0,
+            "discounts_given": queryset.exclude(status=Invoice.Status.CANCELLED).aggregate(total=Sum("discount"))["total"] or 0,
             "outstanding_revenue": queryset.exclude(status=Invoice.Status.CANCELLED).aggregate(total=Sum("balance"))["total"] or 0,
             "overdue_revenue": queryset.filter(status=Invoice.Status.OVERDUE).aggregate(total=Sum("balance"))["total"] or 0,
             "todays_collections": payments.filter(payment_date=today).aggregate(total=Sum("amount_paid"))["total"] or 0,
             "monthly_collections": payments.filter(payment_date__gte=month_start).aggregate(total=Sum("amount_paid"))["total"] or 0,
-            "revenue_by_course": list(queryset.values("course__name").annotate(expected=Sum("final_amount"), collected=Sum("paid_amount"), outstanding=Sum("balance")).order_by("course__name")),
-            "revenue_by_month": list(queryset.values("billing_year", "billing_month").annotate(expected=Sum("final_amount"), collected=Sum("paid_amount"), outstanding=Sum("balance")).order_by("billing_year", "billing_month")),
+            "revenue_by_course": list(queryset.values("course__name").annotate(expected=Sum("final_amount"), collected=Sum("paid_amount"), discounts=Sum("discount"), outstanding=Sum("balance")).order_by("course__name")),
+            "revenue_by_month": list(queryset.values("billing_year", "billing_month").annotate(expected=Sum("final_amount"), collected=Sum("paid_amount"), discounts=Sum("discount"), outstanding=Sum("balance")).order_by("billing_year", "billing_month")),
         })
 
 
@@ -495,6 +498,8 @@ class PaymentViewSet(TenantScopedViewSet):
                 payment_method=serializer.validated_data["payment_method"],
                 notes=serializer.validated_data.get("notes", ""),
                 reference_number=serializer.validated_data.get("reference_number", ""),
+                discount_amount=serializer.validated_data.get("discount_amount", 0),
+                discount_notes=serializer.validated_data.get("discount_notes", ""),
                 received_by=self.request.user,
             )
         except ValueError as exc:
@@ -649,6 +654,11 @@ class DashboardViewSet(viewsets.ViewSet):
     permission_classes = [HasRBACPermission]
     rbac_resource = "dashboards"
 
+    def get_permissions(self):
+        if getattr(self, "action", None) in ["teacher", "student"]:
+            return [IsAuthenticated()]
+        return super().get_permissions()
+
     @action(detail=False, methods=["get"])
     def admin(self, request):
         return Response(dashboard_payload(request.user.tenant, request.user))
@@ -656,6 +666,8 @@ class DashboardViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"])
     def teacher(self, request):
         teacher = getattr(request.user, "teacher_profile", None)
+        if not teacher:
+            raise PermissionDenied("Teacher profile is required.")
         today = timezone.localdate()
         return Response({
             "todays_classes": list(Classes.objects.filter(tenant=request.user.tenant, teachers=teacher).values("id", "name", "start_time", "end_time")),
@@ -873,9 +885,11 @@ class ReportViewSet(viewsets.ViewSet):
         queryset = self.apply_exact_filters(queryset, {"payment_status": "status"})
         queryset = self.apply_search(queryset, ["invoice_number", "student__name", "course__name", "batch__name", "status"])
         queryset = self.apply_ordering(queryset, {"due_date", "student__name", "final_amount", "paid_amount", "balance", "status"}, "-due_date")
-        rows = list(queryset.values("id", "invoice_number", "student__name", "course__name", "batch__name", "billing_month", "billing_year", "due_date", "final_amount", "paid_amount", "balance", "status"))
+        rows = list(queryset.values("id", "invoice_number", "student__name", "course__name", "batch__name", "billing_month", "billing_year", "due_date", "amount", "discount", "final_amount", "paid_amount", "balance", "status"))
         summary = {
             "invoices": queryset.count(),
+            "gross": queryset.aggregate(value=Sum("amount"))["value"] or 0,
+            "discounts": queryset.aggregate(value=Sum("discount"))["value"] or 0,
             "expected": queryset.aggregate(value=Sum("final_amount"))["value"] or 0,
             "collected": queryset.aggregate(value=Sum("paid_amount"))["value"] or 0,
             "pending": queryset.aggregate(value=Sum("balance"))["value"] or 0,
@@ -891,8 +905,15 @@ class ReportViewSet(viewsets.ViewSet):
         queryset = self.apply_exact_filters(queryset, {"payment_method": "payment_method"})
         queryset = self.apply_search(queryset, ["receipt_number", "student__name", "invoice__invoice_number", "payment_method", "received_by__username"])
         queryset = self.apply_ordering(queryset, {"payment_date", "amount_paid", "payment_method", "receipt_number"}, "-payment_date")
-        rows = list(queryset.values("id", "receipt_number", "invoice__invoice_number", "student__name", "payment_date", "payment_method", "amount_paid", "received_by__username"))
-        summary = {"payments": queryset.count(), "total_revenue": queryset.aggregate(value=Sum("amount_paid"))["value"] or 0, "average_payment": round(self.decimalize(queryset.aggregate(value=Avg("amount_paid"))["value"]), 2)}
+        rows = list(queryset.values("id", "receipt_number", "invoice__invoice_number", "student__name", "payment_date", "payment_method", "amount_paid", "invoice__discount", "received_by__username"))
+        paid_invoice_ids = queryset.values_list("invoice_id", flat=True).distinct()
+        invoice_discounts = Invoice.objects.filter(id__in=paid_invoice_ids).aggregate(value=Sum("discount"))["value"] or 0
+        summary = {
+            "payments": queryset.count(),
+            "total_revenue": queryset.aggregate(value=Sum("amount_paid"))["value"] or 0,
+            "discounts": invoice_discounts,
+            "average_payment": round(self.decimalize(queryset.aggregate(value=Avg("amount_paid"))["value"]), 2),
+        }
         charts = {"monthly_revenue": self.chart(queryset, "payment_date", "amount_paid")}
         if request.query_params.get("grouping") == "yearly":
             charts["yearly_revenue"] = list(queryset.values("payment_date__year").annotate(value=Sum("amount_paid")).order_by("payment_date__year"))

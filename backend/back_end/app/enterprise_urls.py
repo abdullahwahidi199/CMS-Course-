@@ -17,6 +17,15 @@ from .enterprise_views import (
     StudentLedgerViewSet,
 )
 from .auth_views import PermissionViewSet, RoleViewSet, UserViewSet
+from .public_admin_views import (
+    PublicAchievementViewSet,
+    PublicAnnouncementCommentViewSet,
+    PublicAnnouncementViewSet,
+    PublicCourseProgramViewSet,
+    PublicEventViewSet,
+    PublicInquiryViewSet,
+    TenantPublicSiteSettingsViewSet,
+)
 
 
 router = DefaultRouter()
@@ -36,6 +45,13 @@ router.register("stationery-purchases", StationeryPurchaseViewSet, basename="v1-
 router.register("dashboards", DashboardViewSet, basename="v1-dashboards")
 router.register("reports", ReportViewSet, basename="v1-reports")
 router.register("notifications", NotificationViewSet, basename="v1-notifications")
+router.register("online-page/settings", TenantPublicSiteSettingsViewSet, basename="v1-online-page-settings")
+router.register("online-page/courses", PublicCourseProgramViewSet, basename="v1-online-page-courses")
+router.register("online-page/announcements", PublicAnnouncementViewSet, basename="v1-online-page-announcements")
+router.register("online-page/comments", PublicAnnouncementCommentViewSet, basename="v1-online-page-comments")
+router.register("online-page/events", PublicEventViewSet, basename="v1-online-page-events")
+router.register("online-page/achievements", PublicAchievementViewSet, basename="v1-online-page-achievements")
+router.register("online-page/inquiries", PublicInquiryViewSet, basename="v1-online-page-inquiries")
 
 urlpatterns = [
     path("", include(router.urls)),

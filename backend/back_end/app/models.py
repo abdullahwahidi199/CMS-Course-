@@ -1,6 +1,7 @@
 from django.db import models
 from django.db.models import Sum
 from django.utils import timezone
+from django.utils.text import slugify
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import AbstractUser
 from django.db.models import Max
@@ -9,6 +10,8 @@ from decimal import Decimal
 
 class Tenant(models.Model):
     name = models.CharField(max_length=200)
+    public_slug = models.SlugField(max_length=180, unique=True, null=True, blank=True)
+    public_site_enabled = models.BooleanField(default=True)
     logo = models.ImageField(
         upload_to="logos/",
         null=True,
@@ -26,6 +29,18 @@ class Tenant(models.Model):
     notification_settings = models.JSONField(default=dict, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if not self.public_slug:
+            base_slug = slugify(self.name) or "education-center"
+            candidate = base_slug
+            counter = 2
+            queryset = Tenant.objects.exclude(pk=self.pk)
+            while queryset.filter(public_slug=candidate).exists():
+                candidate = f"{base_slug}-{counter}"
+                counter += 1
+            self.public_slug = candidate
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
@@ -639,6 +654,7 @@ class Assignment(models.Model):
         class_assigned=models.ForeignKey(Classes,on_delete=models.PROTECT, related_name="assignments")
         title=models.CharField(max_length=255)
         discription=models.TextField()
+        attachment=models.FileField(upload_to="assignment_attachments/", null=True, blank=True)
         due_date=models.DateField()
         total_marks=models.IntegerField(default=100)
         created_at=models.DateTimeField(auto_now_add=True)
@@ -665,6 +681,7 @@ class Submission(models.Model):
     enrollment=models.ForeignKey(Enrollment,on_delete=models.PROTECT,related_name='submissions',null=True,blank=True)
     student=models.ForeignKey(Students,models.PROTECT,related_name='submissions')
     status=models.CharField(max_length=20,choices=STATUS_CHOICES,default='pending')
+    submitted_file=models.FileField(upload_to="assignment_submissions/", null=True, blank=True)
     marks_obtained=models.FloatField(null=True,blank=True)
     suggestion=models.TextField(null=True,blank=True)
     submitted_at=models.DateTimeField(null=True,blank=True)
@@ -702,6 +719,58 @@ class TenantOwnedModel(TimeStampedModel):
 
     class Meta:
         abstract = True
+
+
+def public_site_upload_path(instance, filename):
+    tenant_id = instance.tenant_id or "unassigned"
+    model_name = instance.__class__.__name__.lower()
+    return f"public_site/{tenant_id}/{model_name}/{filename}"
+
+
+def ensure_unique_tenant_slug(instance, source_field="title"):
+    source = getattr(instance, "slug", None) or getattr(instance, source_field, "") or "item"
+    base_slug = slugify(source) or "item"
+    candidate = base_slug
+    counter = 2
+    queryset = instance.__class__.objects.filter(tenant=instance.tenant).exclude(pk=instance.pk)
+    while queryset.filter(slug=candidate).exists():
+        candidate = f"{base_slug}-{counter}"
+        counter += 1
+    instance.slug = candidate
+
+
+class OptimizedImageMixin:
+    image_fields = ()
+
+    def save(self, *args, **kwargs):
+        from .services.image_service import delete_replaced_model_image_fields, optimize_model_image_fields
+
+        old_file_names = {}
+        if self.pk:
+            try:
+                old_instance = self.__class__.objects.only(*self.image_fields).get(pk=self.pk)
+                old_file_names = {
+                    field_name: getattr(old_instance, field_name).name
+                    for field_name in self.image_fields
+                    if getattr(old_instance, field_name, None)
+                }
+            except self.__class__.DoesNotExist:
+                old_file_names = {}
+        optimize_model_image_fields(self, self.image_fields)
+        super().save(*args, **kwargs)
+        delete_replaced_model_image_fields(self, self.image_fields, old_file_names)
+
+    def delete(self, *args, **kwargs):
+        from .services.image_service import delete_model_image_fields
+
+        file_names = {
+            field_name: getattr(self, field_name).name
+            for field_name in self.image_fields
+            if getattr(self, field_name, None)
+        }
+        result = super().delete(*args, **kwargs)
+        delete_model_image_fields(self, self.image_fields, file_names)
+        return result
 
 
 class Assessment(TenantOwnedModel):
@@ -794,6 +863,7 @@ class AssessmentResult(TenantOwnedModel):
 class FeePlan(TenantOwnedModel):
     class BillingCycle(models.TextChoices):
         MONTHLY = "monthly", "Monthly"
+        BATCH = "batch", "Batch / One-time"
 
     course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="fee_plans")
     batch = models.ForeignKey(Classes, on_delete=models.PROTECT, related_name="fee_plans", null=True, blank=True)
@@ -1114,3 +1184,253 @@ class Notification(TenantOwnedModel):
 
     def __str__(self):
         return f"{self.recipient.username} - {self.title}"
+
+
+class TenantPublicSiteSettings(OptimizedImageMixin, TimeStampedModel):
+    tenant = models.OneToOneField(Tenant, on_delete=models.CASCADE, related_name="public_site_settings")
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_public_site_settings",
+    )
+    is_published = models.BooleanField(default=False)
+    center_name = models.CharField(max_length=220, blank=True)
+    tagline = models.CharField(max_length=260, blank=True)
+    brand_logo = models.ImageField(upload_to=public_site_upload_path, null=True, blank=True)
+    banner_image = models.ImageField(upload_to=public_site_upload_path, null=True, blank=True)
+    primary_color = models.CharField(max_length=20, default="#0f766e")
+    accent_color = models.CharField(max_length=20, default="#f59e0b")
+
+    hero_kicker = models.CharField(max_length=140, blank=True)
+    hero_title = models.CharField(max_length=220, blank=True)
+    hero_subtitle = models.TextField(blank=True)
+    hero_image = models.ImageField(upload_to=public_site_upload_path, null=True, blank=True)
+    hero_primary_label = models.CharField(max_length=80, blank=True)
+    hero_primary_url = models.CharField(max_length=260, blank=True)
+    hero_secondary_label = models.CharField(max_length=80, blank=True)
+    hero_secondary_url = models.CharField(max_length=260, blank=True)
+
+    about_title = models.CharField(max_length=220, blank=True)
+    about_body = models.TextField(blank=True)
+    about_image = models.ImageField(upload_to=public_site_upload_path, null=True, blank=True)
+    about_highlights = models.JSONField(default=list, blank=True)
+
+    contact_title = models.CharField(max_length=220, blank=True)
+    contact_body = models.TextField(blank=True)
+    contact_email = models.EmailField(blank=True)
+    contact_phone = models.CharField(max_length=40, blank=True)
+    contact_address = models.TextField(blank=True)
+    office_hours = models.CharField(max_length=180, blank=True)
+    map_url = models.URLField(blank=True)
+
+    chat_enabled = models.BooleanField(default=True)
+    chat_title = models.CharField(max_length=160, blank=True)
+    chat_welcome_message = models.CharField(max_length=260, blank=True)
+    whatsapp_number = models.CharField(max_length=40, blank=True)
+    telegram_url = models.URLField(blank=True)
+    messenger_url = models.URLField(blank=True)
+
+    seo_title = models.CharField(max_length=180, blank=True)
+    seo_description = models.CharField(max_length=320, blank=True)
+    seo_keywords = models.CharField(max_length=320, blank=True)
+    social_image = models.ImageField(upload_to=public_site_upload_path, null=True, blank=True)
+    footer_note = models.CharField(max_length=220, blank=True)
+
+    image_fields = ("brand_logo", "banner_image", "hero_image", "about_image", "social_image")
+
+    class Meta:
+        verbose_name = "Tenant public site settings"
+        verbose_name_plural = "Tenant public site settings"
+
+    def __str__(self):
+        return f"Public site settings - {self.tenant.name}"
+
+
+class PublicCourseProgram(OptimizedImageMixin, TenantOwnedModel):
+    title = models.CharField(max_length=220)
+    slug = models.SlugField(max_length=240, blank=True)
+    summary = models.CharField(max_length=320, blank=True)
+    description = models.TextField(blank=True)
+    image = models.ImageField(upload_to=public_site_upload_path, null=True, blank=True)
+    duration = models.CharField(max_length=120, blank=True)
+    price_label = models.CharField(max_length=120, blank=True)
+    level = models.CharField(max_length=120, blank=True)
+    mode = models.CharField(max_length=120, blank=True)
+    button_label = models.CharField(max_length=80, blank=True)
+    button_url = models.CharField(max_length=260, blank=True)
+    seo_title = models.CharField(max_length=180, blank=True)
+    seo_description = models.CharField(max_length=320, blank=True)
+    order = models.PositiveIntegerField(default=0)
+    is_published = models.BooleanField(default=False)
+
+    image_fields = ("image",)
+
+    class Meta:
+        ordering = ["order", "title"]
+        unique_together = ("tenant", "slug")
+        indexes = [
+            models.Index(fields=["tenant", "is_published"]),
+            models.Index(fields=["tenant", "slug"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        ensure_unique_tenant_slug(self)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.title
+
+
+class PublicAnnouncement(OptimizedImageMixin, TenantOwnedModel):
+    title = models.CharField(max_length=240)
+    slug = models.SlugField(max_length=260, blank=True)
+    summary = models.CharField(max_length=360, blank=True)
+    body = models.TextField()
+    category = models.CharField(max_length=120, blank=True)
+    image = models.ImageField(upload_to=public_site_upload_path, null=True, blank=True)
+    is_featured = models.BooleanField(default=False)
+    is_published = models.BooleanField(default=False)
+    published_at = models.DateTimeField(default=timezone.now)
+    seo_title = models.CharField(max_length=180, blank=True)
+    seo_description = models.CharField(max_length=320, blank=True)
+
+    image_fields = ("image",)
+
+    class Meta:
+        ordering = ["-published_at", "-created_at"]
+        unique_together = ("tenant", "slug")
+        indexes = [
+            models.Index(fields=["tenant", "is_published", "published_at"]),
+            models.Index(fields=["tenant", "slug"]),
+            models.Index(fields=["tenant", "category"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        ensure_unique_tenant_slug(self)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.title
+
+
+class PublicAnnouncementComment(TenantOwnedModel):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        HIDDEN = "hidden", "Hidden"
+        SPAM = "spam", "Spam"
+
+    announcement = models.ForeignKey(PublicAnnouncement, on_delete=models.CASCADE, related_name="comments")
+    visitor_name = models.CharField(max_length=160)
+    visitor_email = models.EmailField(blank=True)
+    body = models.TextField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=260, blank=True)
+    is_spam = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["created_at"]
+        indexes = [
+            models.Index(fields=["tenant", "announcement", "status"]),
+            models.Index(fields=["tenant", "status", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.visitor_name} on {self.announcement.title}"
+
+
+class PublicEvent(OptimizedImageMixin, TenantOwnedModel):
+    title = models.CharField(max_length=240)
+    slug = models.SlugField(max_length=260, blank=True)
+    summary = models.CharField(max_length=360, blank=True)
+    description = models.TextField(blank=True)
+    image = models.ImageField(upload_to=public_site_upload_path, null=True, blank=True)
+    location = models.CharField(max_length=220, blank=True)
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField(null=True, blank=True)
+    is_published = models.BooleanField(default=False)
+    is_featured = models.BooleanField(default=False)
+    seo_title = models.CharField(max_length=180, blank=True)
+    seo_description = models.CharField(max_length=320, blank=True)
+    order = models.PositiveIntegerField(default=0)
+
+    image_fields = ("image",)
+
+    class Meta:
+        ordering = ["starts_at", "order", "title"]
+        unique_together = ("tenant", "slug")
+        indexes = [
+            models.Index(fields=["tenant", "is_published", "starts_at"]),
+            models.Index(fields=["tenant", "slug"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        ensure_unique_tenant_slug(self)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.title
+
+
+class PublicAchievement(OptimizedImageMixin, TenantOwnedModel):
+    title = models.CharField(max_length=240)
+    slug = models.SlugField(max_length=260, blank=True)
+    summary = models.CharField(max_length=360, blank=True)
+    description = models.TextField(blank=True)
+    image = models.ImageField(upload_to=public_site_upload_path, null=True, blank=True)
+    metric_value = models.CharField(max_length=80, blank=True)
+    metric_label = models.CharField(max_length=120, blank=True)
+    achieved_on = models.DateField(null=True, blank=True)
+    seo_title = models.CharField(max_length=180, blank=True)
+    seo_description = models.CharField(max_length=320, blank=True)
+    order = models.PositiveIntegerField(default=0)
+    is_published = models.BooleanField(default=False)
+
+    image_fields = ("image",)
+
+    class Meta:
+        ordering = ["order", "-achieved_on", "title"]
+        unique_together = ("tenant", "slug")
+        indexes = [
+            models.Index(fields=["tenant", "is_published"]),
+            models.Index(fields=["tenant", "slug"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        ensure_unique_tenant_slug(self)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.title
+
+
+class PublicInquiry(TenantOwnedModel):
+    class Source(models.TextChoices):
+        CONTACT = "contact", "Contact"
+        CHAT = "chat", "Chat"
+
+    class Status(models.TextChoices):
+        NEW = "new", "New"
+        READ = "read", "Read"
+        CLOSED = "closed", "Closed"
+
+    visitor_name = models.CharField(max_length=160)
+    visitor_email = models.EmailField(blank=True)
+    visitor_phone = models.CharField(max_length=40, blank=True)
+    subject = models.CharField(max_length=200, blank=True)
+    message = models.TextField()
+    source = models.CharField(max_length=20, choices=Source.choices, default=Source.CONTACT)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.NEW)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["tenant", "status"]),
+            models.Index(fields=["tenant", "source"]),
+        ]
+
+    def __str__(self):
+        return f"{self.visitor_name} - {self.subject or self.source}"

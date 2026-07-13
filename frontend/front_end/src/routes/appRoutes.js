@@ -12,19 +12,22 @@ export const APP_ROUTES = [
   { label: "Users", path: "/admin/dashboard/users", permission: "users.view" },
   { label: "Roles & Permissions", path: "/admin/dashboard/roles", permission: "roles.view" },
   { label: "Notifications", path: "/admin/dashboard/notifications", permission: "notifications.view" },
+  { label: "Online Page", path: "/admin/dashboard/online-page", permission: "online-page.view" },
   { label: "Courses", path: "/admin/dashboard/courses", permission: "courses.view" },
   { label: "Batches", path: "/admin/dashboard/classes", permission: "batches.view" },
   { label: "Staff", path: "/admin/dashboard/staff", permission: "staff.view" },
 ];
 
 export const TEACHER_ROUTES = [
-  { label: "Dashboard", path: "/teacher/dashboard", permission: "dashboard.view" },
+  { label: "Dashboard", path: "/teacher/dashboard" },
   { label: "My Classes", path: "/teacher/dashboard/classes", permission: "batches.view" },
   { label: "My Students", path: "/teacher/dashboard/students", permission: "students.view" },
   { label: "Attendance", path: "/teacher/dashboard/attendance", permission: "attendance.view" },
   { label: "Marks", path: "/teacher/dashboard/marks", permission: "assessments.view" },
   { label: "Assessments", path: "/teacher/dashboard/assessments", permission: "assessments.view" },
+  { label: "Exams", path: "/teacher/dashboard/exams", permission: "assessments.view" },
   { label: "Assignments", path: "/teacher/dashboard/assignments", permission: "assessments.view" },
+  { label: "Announcements", path: "/teacher/dashboard/announcements" },
   { label: "Notifications", path: "/teacher/dashboard/notifications", permission: "notifications.view" },
   { label: "Timetable", path: "/teacher/dashboard/timetable", permission: "batches.view" },
   { label: "Profile", path: "/teacher/dashboard/profile" },

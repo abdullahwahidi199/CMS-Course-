@@ -22,7 +22,7 @@ ACTIVE_BILLING_STATUSES = {
 def create_enrollment(*, tenant, student, batch, course=None, enrollment_date=None, status=Enrollment.Status.ACTIVE, created_by=None, remarks=""):
     if isinstance(batch, int):
         batch = Classes.objects.select_related("course").get(id=batch, tenant=tenant)
-    course = course or batch.course
+    course = batch.course or course
     enrollment = Enrollment.objects.create(
         tenant=tenant,
         created_by=created_by,
