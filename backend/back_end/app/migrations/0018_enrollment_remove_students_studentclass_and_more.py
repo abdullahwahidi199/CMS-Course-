@@ -6,98 +6,6 @@ from django.conf import settings
 from django.db import migrations, models
 
 
-def migrate_user_roles(apps, schema_editor):
-    User = apps.get_model("app", "User")
-    Role = apps.get_model("app", "Role")
-    Permission = apps.get_model("app", "RBACPermission")
-    all_permissions = list(Permission.objects.filter(is_active=True))
-    role_map = {
-        "super_admin": "super-admin",
-        "super-admin": "super-admin",
-        "admin": "admin",
-        "teacher": "teacher",
-        "student": "student",
-    }
-    for user in User.objects.all():
-        existing_role_id = getattr(user, "custom_role_id", None)
-        if existing_role_id:
-            user.role = str(existing_role_id)
-            user.save(update_fields=["role"])
-            continue
-        slug = role_map.get((user.role or "").replace("_", "-"), "student")
-        role, _ = Role.objects.get_or_create(
-            tenant=user.tenant,
-            slug=slug,
-            defaults={"name": slug.replace("-", " ").title(), "is_system": True},
-        )
-        if slug in ["super-admin", "admin"]:
-            role.permissions.set(all_permissions)
-        user.role = str(role.id)
-        user.save(update_fields=["role"])
-
-
-def create_courses_from_batches(apps, schema_editor):
-    Course = apps.get_model("app", "Course")
-    Classes = apps.get_model("app", "Classes")
-    for batch in Classes.objects.all():
-        course, _ = Course.objects.get_or_create(
-            id=batch.id,
-            defaults={
-                "tenant": batch.tenant,
-                "name": batch.name,
-                "code": f"BATCH-{batch.id}",
-                "description": batch.subjects or "",
-            },
-        )
-        batch.course_id = course.id
-        batch.save(update_fields=["course"])
-
-
-def migrate_assessment_batches(apps, schema_editor):
-    Assessment = apps.get_model("app", "Assessment")
-    for assessment in Assessment.objects.all():
-        if assessment.course_id and not assessment.batch_id:
-            assessment.batch_id = assessment.course_id
-            assessment.save(update_fields=["batch"])
-
-
-def create_enrollments_from_student_class(apps, schema_editor):
-    Enrollment = apps.get_model("app", "Enrollment")
-    Students = apps.get_model("app", "Students")
-    for student in Students.objects.exclude(studentClass_id=None):
-        batch = student.studentClass
-        if not batch or not batch.course_id:
-            continue
-        Enrollment.objects.get_or_create(
-            tenant=student.tenant,
-            student=student,
-            batch=batch,
-            course_id=batch.course_id,
-            defaults={
-                "enrollment_date": getattr(student, "enrollment_date", None) or django.utils.timezone.localdate(),
-                "status": "active",
-                "remarks": "Migrated from legacy studentClass.",
-            },
-        )
-
-
-def migrate_assessment_results(apps, schema_editor):
-    AssessmentResult = apps.get_model("app", "AssessmentResult")
-    Enrollment = apps.get_model("app", "Enrollment")
-    for result in AssessmentResult.objects.select_related("assessment", "student").all():
-        assessment = result.assessment
-        enrollment = Enrollment.objects.filter(student=result.student, batch_id=assessment.batch_id or assessment.course_id).first()
-        if enrollment:
-            result.enrollment_id = enrollment.id
-            result.course_id = enrollment.course_id
-            result.batch_id = enrollment.batch_id
-        else:
-            result.course_id = assessment.course_id
-            result.batch_id = assessment.batch_id
-        result.teacher_id = assessment.teacher_id
-        result.save(update_fields=["enrollment", "course", "batch", "teacher"])
-
-
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -122,10 +30,25 @@ class Migration(migrations.Migration):
                 'ordering': ['-enrollment_date', 'student__name'],
             },
         ),
-        migrations.RunPython(migrate_user_roles, migrations.RunPython.noop),
-        migrations.RemoveField(
-            model_name='user',
-            name='custom_role',
+        migrations.CreateModel(
+            name='Course',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('is_active', models.BooleanField(default=True)),
+                ('is_archived', models.BooleanField(default=False)),
+                ('archived_at', models.DateTimeField(blank=True, null=True)),
+                ('name', models.CharField(max_length=150)),
+                ('code', models.CharField(blank=True, max_length=40)),
+                ('description', models.TextField(blank=True)),
+                ('duration_weeks', models.PositiveIntegerField(default=0)),
+                ('fee', models.DecimalField(decimal_places=2, default=0, max_digits=10)),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('updated_at', models.DateTimeField(auto_now=True)),
+                ('tenant', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='courses', to='app.tenant')),
+            ],
+            options={
+                'ordering': ['name'],
+            },
         ),
         migrations.AddField(
             model_name='assessment',
@@ -136,6 +59,11 @@ class Migration(migrations.Migration):
             model_name='assessmentresult',
             name='batch',
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='assessment_results', to='app.classes'),
+        ),
+        migrations.AddField(
+            model_name='assessmentresult',
+            name='course',
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='assessment_results', to='app.course'),
         ),
         migrations.AddField(
             model_name='assessmentresult',
@@ -151,6 +79,11 @@ class Migration(migrations.Migration):
             model_name='classes',
             name='capacity',
             field=models.PositiveIntegerField(default=0),
+        ),
+        migrations.AddField(
+            model_name='classes',
+            name='course',
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='batches', to='app.course'),
         ),
         migrations.AddField(
             model_name='classes',
@@ -207,107 +140,6 @@ class Migration(migrations.Migration):
             name='is_archived',
             field=models.BooleanField(default=False),
         ),
-        migrations.AlterField(
-            model_name='assessmentresult',
-            name='assessment',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='results', to='app.assessment'),
-        ),
-        migrations.AlterField(
-            model_name='assessmentresult',
-            name='student',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='assessment_results', to='app.students'),
-        ),
-        migrations.AlterField(
-            model_name='assignment',
-            name='class_assigned',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='assignments', to='app.classes'),
-        ),
-        migrations.AlterField(
-            model_name='attendance',
-            name='class_fk',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='attendances', to='app.classes'),
-        ),
-        migrations.AlterField(
-            model_name='attendance',
-            name='student',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='attendances', to='app.students'),
-        ),
-        migrations.AlterField(
-            model_name='classes',
-            name='roomOfClass',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='classes', to='app.roomofclass'),
-        ),
-        migrations.AlterField(
-            model_name='students',
-            name='user',
-            field=models.OneToOneField(on_delete=django.db.models.deletion.PROTECT, related_name='student_profile', to=settings.AUTH_USER_MODEL),
-        ),
-        migrations.AlterField(
-            model_name='submission',
-            name='assignment',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='submissions', to='app.assignment'),
-        ),
-        migrations.AlterField(
-            model_name='submission',
-            name='student',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='submissions', to='app.students'),
-        ),
-        migrations.AlterField(
-            model_name='teachers',
-            name='user',
-            field=models.OneToOneField(on_delete=django.db.models.deletion.PROTECT, related_name='teacher_profile', to=settings.AUTH_USER_MODEL),
-        ),
-        migrations.AlterField(
-            model_name='user',
-            name='role',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='users', to='app.role'),
-        ),
-        migrations.CreateModel(
-            name='Course',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('is_active', models.BooleanField(default=True)),
-                ('is_archived', models.BooleanField(default=False)),
-                ('archived_at', models.DateTimeField(blank=True, null=True)),
-                ('name', models.CharField(max_length=150)),
-                ('code', models.CharField(blank=True, max_length=40)),
-                ('description', models.TextField(blank=True)),
-                ('duration_weeks', models.PositiveIntegerField(default=0)),
-                ('fee', models.DecimalField(decimal_places=2, default=0, max_digits=10)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('tenant', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='courses', to='app.tenant')),
-            ],
-            options={
-                'ordering': ['name'],
-            },
-        ),
-        migrations.AddField(
-            model_name='assessmentresult',
-            name='course',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='assessment_results', to='app.course'),
-        ),
-        migrations.AddField(
-            model_name='classes',
-            name='course',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='batches', to='app.course'),
-        ),
-        migrations.RunPython(create_courses_from_batches, migrations.RunPython.noop),
-        migrations.RunPython(migrate_assessment_batches, migrations.RunPython.noop),
-        migrations.AlterField(
-            model_name='assessment',
-            name='course',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='assessments', to='app.course'),
-        ),
-        migrations.AlterField(
-            model_name='feeplan',
-            name='course',
-            field=models.OneToOneField(on_delete=django.db.models.deletion.PROTECT, related_name='fee_plan', to='app.course'),
-        ),
-        migrations.AddIndex(
-            model_name='assessment',
-            index=models.Index(fields=['batch', 'assessment_date'], name='app_assessm_batch_i_9f4488_idx'),
-        ),
         migrations.AddField(
             model_name='enrollment',
             name='batch',
@@ -333,15 +165,6 @@ class Migration(migrations.Migration):
             name='tenant',
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='enrollments', to='app.tenant'),
         ),
-        migrations.RunPython(create_enrollments_from_student_class, migrations.RunPython.noop),
-        migrations.RemoveField(
-            model_name='students',
-            name='studentClass',
-        ),
-        migrations.AlterUniqueTogether(
-            name='assessmentresult',
-            unique_together=set(),
-        ),
         migrations.AddField(
             model_name='assessmentresult',
             name='enrollment',
@@ -356,38 +179,5 @@ class Migration(migrations.Migration):
             model_name='submission',
             name='enrollment',
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='submissions', to='app.enrollment'),
-        ),
-        migrations.RunPython(migrate_assessment_results, migrations.RunPython.noop),
-        migrations.AlterUniqueTogether(
-            name='assessmentresult',
-            unique_together={('assessment', 'enrollment')},
-        ),
-        migrations.AddIndex(
-            model_name='assessmentresult',
-            index=models.Index(fields=['enrollment', 'assessment'], name='app_assessm_enrollm_4930bb_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='assessmentresult',
-            index=models.Index(fields=['course', 'batch'], name='app_assessm_course__a6069b_idx'),
-        ),
-        migrations.AlterUniqueTogether(
-            name='course',
-            unique_together={('tenant', 'code')},
-        ),
-        migrations.AddIndex(
-            model_name='enrollment',
-            index=models.Index(fields=['tenant', 'status'], name='app_enrollm_tenant__ce9028_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='enrollment',
-            index=models.Index(fields=['student', 'status'], name='app_enrollm_student_c97ca7_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='enrollment',
-            index=models.Index(fields=['batch', 'status'], name='app_enrollm_batch_i_282d57_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='enrollment',
-            index=models.Index(fields=['course', 'status'], name='app_enrollm_course__37e4f8_idx'),
         ),
     ]

@@ -56,7 +56,7 @@ def populate_enrollment_billing(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('app', '0018_enrollment_remove_students_studentclass_and_more'),
+        ('app', '0018_finalize_enrollment_refactor_schema'),
     ]
 
     operations = [
