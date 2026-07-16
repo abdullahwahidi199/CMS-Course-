@@ -3,6 +3,7 @@ from html import escape
 from decimal import Decimal
 
 from django.db import transaction
+from django.db.models import DateField, DateTimeField
 from django.db.models import Avg, Count, F, Q, Sum
 from django.http import HttpResponse
 from django.utils import timezone
@@ -60,6 +61,7 @@ from .models import (
     Students,
     Teachers,
 )
+from .shamsi import convert_query_date, convert_rows_dates, format_calendar_date, get_module_calendar
 
 
 class TenantScopedViewSet(viewsets.ModelViewSet):
@@ -88,6 +90,19 @@ class TenantScopedViewSet(viewsets.ModelViewSet):
         for field in self.filter_fields:
             value = self.request.query_params.get(field)
             if value not in [None, ""]:
+                try:
+                    model_field = queryset.model._meta.get_field(field)
+                except Exception:
+                    model_field = None
+                if isinstance(model_field, (DateField, DateTimeField)):
+                    module = getattr(self, "rbac_resource", None) or "dashboard"
+                    if module == "invoices":
+                        module = "invoices"
+                    elif module in ["payments", "student-ledger"]:
+                        module = "fees"
+                    elif module in ["stationery-purchases", "inventory-transactions", "stationery-items"]:
+                        module = "inventory"
+                    value = convert_query_date(value, self.request.user.tenant, module)
                 queryset = queryset.filter(**{field: value})
         return queryset
 
@@ -156,8 +171,8 @@ def invoice_pdf(invoice):
             tenant.name if tenant else "Institute",
             getattr(tenant, "address", "") if tenant else "",
             f"Phone: {getattr(tenant, 'phone', '') if tenant else ''} Email: {getattr(tenant, 'email', '') if tenant else ''}",
-            f"Invoice date: {invoice.created_at.date()}",
-            f"Due date: {invoice.due_date}",
+            f"Invoice date: {format_calendar_date(invoice.created_at.date(), get_module_calendar(tenant, 'invoices'))}",
+            f"Due date: {format_calendar_date(invoice.due_date, get_module_calendar(tenant, 'invoices'))}",
             f"Student ID: {invoice.student.student_number or invoice.student.id}",
             f"Student: {invoice.student.name}",
             f"Username: {invoice.student.user.username if invoice.student.user_id else ''}",
@@ -187,7 +202,7 @@ def receipt_pdf(payment):
         f"Receipt {payment.receipt_number}",
         [
             tenant.name if tenant else "Institute",
-            f"Payment date: {payment.payment_date}",
+            f"Payment date: {format_calendar_date(payment.payment_date, get_module_calendar(tenant, 'fees'))}",
             f"Student ID: {payment.student.student_number if payment.student_id else ''}",
             f"Student: {payment.student.name if payment.student_id else ''}",
             f"Course: {payment.enrollment.course.name if payment.enrollment_id else invoice.course.name if invoice.course_id else ''}",
@@ -218,9 +233,9 @@ class AssessmentViewSet(TenantScopedViewSet):
         date_from = self.request.query_params.get("date_from")
         date_to = self.request.query_params.get("date_to")
         if date_from:
-            queryset = queryset.filter(assessment_date__gte=date_from)
+            queryset = queryset.filter(assessment_date__gte=convert_query_date(date_from, self.request.user.tenant, "assessments"))
         if date_to:
-            queryset = queryset.filter(assessment_date__lte=date_to)
+            queryset = queryset.filter(assessment_date__lte=convert_query_date(date_to, self.request.user.tenant, "assessments"))
         user = self.request.user
         role_slug = user.role.slug if user.role_id else ""
         if role_slug == "teacher" and hasattr(user, "teacher_profile"):
@@ -397,7 +412,7 @@ class InvoiceViewSet(TenantScopedViewSet):
 
     @action(detail=False, methods=["post"], url_path="generate-monthly")
     def generate_monthly(self, request):
-        serializer = GenerateInvoicesSerializer(data=request.data)
+        serializer = GenerateInvoicesSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         invoices = generate_monthly_invoices(
             tenant=request.user.tenant,
@@ -762,10 +777,11 @@ class ReportViewSet(viewsets.ViewSet):
     def filtered_dates(self, queryset, field="created_at"):
         start = self.request.query_params.get("start_date")
         end = self.request.query_params.get("end_date")
+        module = getattr(self, "action", None) or "reports"
         if start:
-            queryset = queryset.filter(**{f"{field}__gte": start})
+            queryset = queryset.filter(**{f"{field}__gte": convert_query_date(start, self.request.user.tenant, module)})
         if end:
-            queryset = queryset.filter(**{f"{field}__lte": end})
+            queryset = queryset.filter(**{f"{field}__lte": convert_query_date(end, self.request.user.tenant, module)})
         return queryset
 
     def apply_exact_filters(self, queryset, mapping):
@@ -806,6 +822,13 @@ class ReportViewSet(viewsets.ViewSet):
     def decimalize(self, value):
         return float(value or 0)
 
+    def chart_period_label(self, value):
+        if not value:
+            return "Unknown"
+        period = value.date() if hasattr(value, "date") else value
+        calendar = get_module_calendar(self.request.user.tenant, getattr(self, "action", None) or "reports")
+        return format_calendar_date(period, calendar)
+
     def chart(self, queryset, date_field, amount_field=None, count_field="id"):
         grouped = queryset.annotate(period=TruncMonth(date_field)).values("period")
         if amount_field:
@@ -813,11 +836,12 @@ class ReportViewSet(viewsets.ViewSet):
         else:
             grouped = grouped.annotate(value=Count(count_field))
         return [
-            {"label": row["period"].strftime("%Y-%m") if row["period"] else "Unknown", "value": self.decimalize(row["value"])}
+            {"label": self.chart_period_label(row["period"]), "value": self.decimalize(row["value"])}
             for row in grouped.order_by("period")
         ]
 
     def report(self, name, queryset, rows, summary=None, charts=None, last_generated=None):
+        rows = convert_rows_dates(rows, self.request.user.tenant, getattr(self, "action", None) or name)
         export = self.request.query_params.get("export")
         if export == "csv":
             return self.csv_response(name, rows)

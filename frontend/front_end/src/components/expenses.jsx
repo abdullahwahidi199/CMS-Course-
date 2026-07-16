@@ -10,6 +10,7 @@ import {
 import DataTable from "./shared/DataTable";
 import PageHeader from "./shared/PageHeader";
 import StatCard from "./shared/StatCard";
+import CalendarDatePicker from "./shared/CalendarDatePicker";
 import instance from "../api/axiosInstance";
 
 const emptyExpense = {
@@ -165,23 +166,19 @@ function ExpenseModal({ expense, categories, onClose, onSaved }) {
             />
           </Field>
           <Field label="Expense Date">
-            <input
-              type="date"
+            <CalendarDatePicker
+              module="expenses"
               className={inputClass()}
               value={form.expense_date || ""}
-              onChange={(event) =>
-                setForm({ ...form, expense_date: event.target.value })
-              }
+              onChange={(value) => setForm({ ...form, expense_date: value })}
             />
           </Field>
           <Field label="Payment Date">
-            <input
-              type="date"
+            <CalendarDatePicker
+              module="expenses"
               className={inputClass()}
               value={form.payment_date || ""}
-              onChange={(event) =>
-                setForm({ ...form, payment_date: event.target.value })
-              }
+              onChange={(value) => setForm({ ...form, payment_date: value })}
             />
           </Field>
           <div className="md:col-span-4">
@@ -482,23 +479,19 @@ export default function Expenses() {
             </Field>
 
             <Field label="Start Date">
-              <input
-                type="date"
+              <CalendarDatePicker
+                module="expenses"
                 className={inputClass()}
                 value={filters.start_date}
-                onChange={(event) =>
-                  setFilters({ ...filters, start_date: event.target.value })
-                }
+                onChange={(value) => setFilters({ ...filters, start_date: value })}
               />
             </Field>
             <Field label="End Date">
-              <input
-                type="date"
+              <CalendarDatePicker
+                module="expenses"
                 className={inputClass()}
                 value={filters.end_date}
-                onChange={(event) =>
-                  setFilters({ ...filters, end_date: event.target.value })
-                }
+                onChange={(value) => setFilters({ ...filters, end_date: value })}
               />
             </Field>
             <div className="flex items-end">
@@ -517,6 +510,7 @@ export default function Expenses() {
             loading={loading}
             error={error}
             pageSize={15}
+            calendarModule="expenses"
             actions={(row) => [
               { label: "Edit", onClick: () => setEditing(row) },
               {
@@ -553,6 +547,7 @@ export default function Expenses() {
                 render: (row) => (row.is_active ? "Yes" : "No"),
               },
             ]}
+            calendarModule="expenses"
           />
         </>
       ) : null}
@@ -608,6 +603,7 @@ export default function Expenses() {
               },
               { key: "used_percentage", label: "Used %" },
             ]}
+            calendarModule="expenses"
           />
         </>
       ) : null}
@@ -653,6 +649,7 @@ export default function Expenses() {
                 render: (row) => (row.is_active ? "Yes" : "No"),
               },
             ]}
+            calendarModule="expenses"
           />
         </>
       ) : null}
@@ -674,6 +671,7 @@ export default function Expenses() {
                 render: (row) => money(row.total),
               },
             ]}
+            calendarModule="expenses"
           />
           <DataTable
             title="Monthly Expense Report"
@@ -686,6 +684,7 @@ export default function Expenses() {
                 render: (row) => money(row.total),
               },
             ]}
+            calendarModule="expenses"
           />
         </div>
       ) : null}

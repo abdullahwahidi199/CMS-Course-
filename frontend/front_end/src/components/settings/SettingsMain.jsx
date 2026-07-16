@@ -2,6 +2,7 @@ import { useContext, useEffect, useMemo, useState } from "react";
 import {
   Bell,
   Building2,
+  CalendarDays,
   Camera,
   CheckCircle2,
   KeyRound,
@@ -15,6 +16,7 @@ import instance from "../../api/axiosInstance";
 import { AuthContext } from "../../AuthProvider";
 import PageHeader from "../shared/PageHeader";
 import { mediaUrl } from "../../utils/mediaUrl";
+import { CALENDAR_MODULES, defaultCalendarSettings, normalizeCalendarSettings } from "../../utils/calendar";
 
 const emptyTenant = {
   name: "",
@@ -26,6 +28,7 @@ const emptyTenant = {
   subscription_expiry: "",
   created_at: "",
   notification_settings: {},
+  calendar_settings: defaultCalendarSettings,
 };
 
 const notificationOptions = [
@@ -42,6 +45,29 @@ const notificationOptions = [
 const defaultNotificationSettings = Object.fromEntries(
   notificationOptions.map(([key]) => [key, true]),
 );
+
+const calendarLabels = {
+  admissions: "Admissions",
+  students: "Students",
+  attendance: "Attendance",
+  teachers: "Teachers",
+  classes: "Classes",
+  exams: "Exams",
+  assessments: "Assessments",
+  fees: "Fees",
+  expenses: "Expenses",
+  invoices: "Invoices",
+  payroll: "Payroll",
+  schedules: "Schedules",
+  reports: "Reports",
+  certificates: "Certificates",
+  notifications: "Notifications",
+  dashboard: "Dashboard",
+  inventory: "Inventory",
+  library: "Library",
+  transportation: "Transportation",
+  hostel: "Hostel",
+};
 
 const emptyAccount = {
   first_name: "",
@@ -118,7 +144,11 @@ export default function SettingsMain() {
     setError("");
     try {
       const response = await instance.get("/get-tenant/");
-      setTenantForm({ ...emptyTenant, ...response.data });
+      setTenantForm({
+        ...emptyTenant,
+        ...response.data,
+        calendar_settings: normalizeCalendarSettings(response.data.calendar_settings || response.data.notification_settings?.calendar_settings || {}),
+      });
       setAccountForm({
         ...emptyAccount,
         first_name: user?.first_name || "",
@@ -129,7 +159,13 @@ export default function SettingsMain() {
       });
     } catch (err) {
       setError(err.response?.data?.detail || "Could not load settings.");
-      if (authTenant) setTenantForm({ ...emptyTenant, ...authTenant });
+      if (authTenant) {
+        setTenantForm({
+          ...emptyTenant,
+          ...authTenant,
+          calendar_settings: normalizeCalendarSettings(authTenant.calendar_settings || authTenant.notification_settings?.calendar_settings || {}),
+        });
+      }
     } finally {
       setLoading((current) => ({ ...current, initial: false }));
     }
@@ -155,6 +191,16 @@ export default function SettingsMain() {
         ...(current.notification_settings || {}),
         [key]: !({ ...defaultNotificationSettings, ...(current.notification_settings || {}) }[key]),
       },
+    }));
+  };
+
+  const updateCalendarSetting = (key, value) => {
+    setTenantForm((current) => ({
+      ...current,
+      calendar_settings: normalizeCalendarSettings({
+        ...(current.calendar_settings || {}),
+        [key]: value,
+      }),
     }));
   };
 
@@ -187,11 +233,16 @@ export default function SettingsMain() {
           ...(tenantForm.notification_settings || {}),
         }),
       );
+      formData.append("calendar_settings", JSON.stringify(normalizeCalendarSettings(tenantForm.calendar_settings || {})));
       if (tenantForm.logo instanceof File) formData.append("logo", tenantForm.logo);
       const response = await instance.patch("/update-tenant/", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setTenantForm({ ...emptyTenant, ...response.data });
+      setTenantForm({
+        ...emptyTenant,
+        ...response.data,
+        calendar_settings: normalizeCalendarSettings(response.data.calendar_settings || response.data.notification_settings?.calendar_settings || {}),
+      });
       await hydrate();
       setMessage("Institution settings saved.");
     } catch (err) {
@@ -366,6 +417,50 @@ export default function SettingsMain() {
         </div>
       </section>
 
+      <section className="rounded-md bg-white p-4 shadow-sm">
+        <div className="mb-4 flex items-center gap-2">
+          <CalendarDays size={18} className="text-cyan-700" />
+          <h3 className="font-semibold text-gray-900">Calendar Settings</h3>
+        </div>  
+        <div className="grid gap-4 md:grid-cols-3">
+          <Field label="Global Default Calendar">
+            <select
+              className={fieldClass()}
+              value={tenantForm.calendar_settings?.default_calendar || "shamsi"}
+              onChange={(event) => updateCalendarSetting("default_calendar", event.target.value)}
+              disabled={!canEditTenant}
+            >
+              <option value="shamsi">Afghan Hijri Shamsi</option>
+              <option value="gregorian">Gregorian</option>
+            </select>
+          </Field>
+          {CALENDAR_MODULES.map((module) => (
+            <Field key={module} label={calendarLabels[module] || module}>
+              <select
+                className={fieldClass()}
+                value={tenantForm.calendar_settings?.[`${module}_calendar`] || "inherit"}
+                onChange={(event) => updateCalendarSetting(`${module}_calendar`, event.target.value)}
+                disabled={!canEditTenant}
+              >
+                <option value="inherit">Inherit global</option>
+                <option value="shamsi">Afghan Hijri Shamsi</option>
+                <option value="gregorian">Gregorian</option>
+              </select>
+            </Field>
+          ))}
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button
+            className="inline-flex items-center gap-2 rounded-md bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            onClick={saveTenant}
+            disabled={!canEditTenant || loading.tenant}
+          >
+            <Save size={16} />
+            {loading.tenant ? "Saving..." : "Save Calendar Settings"}
+          </button>
+        </div>
+      </section>
+
       <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
         <section className="rounded-md bg-white p-4 shadow-sm">
           <div className="mb-4 flex items-center gap-2">
@@ -451,7 +546,7 @@ export default function SettingsMain() {
           </div>
           <div className="rounded-md border border-gray-200 p-3 text-sm">
             <div className="flex items-center gap-2 text-gray-500"><Phone size={15} /> Last Login</div>
-            <p className="mt-1 font-semibold text-gray-900">{user?.last_login ? new Date(user.last_login).toLocaleString() : "N/A"}</p>
+            <p className="mt-1 font-semibold text-gray-900">{user?.last_login || "N/A"}</p>
           </div>
         </div>
       </section>

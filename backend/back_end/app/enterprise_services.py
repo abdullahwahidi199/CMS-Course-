@@ -27,6 +27,7 @@ from .models import (
     Teachers,
 )
 from .services.notification_service import notify_admins, send_notification
+from .shamsi import CALENDAR_SHAMSI, convert_rows_dates, get_module_calendar, to_gregorian, to_shamsi
 
 
 GRADE_SCALE = (
@@ -121,7 +122,7 @@ def invoice_amounts(student, plan, discount=Decimal("0")):
 
 
 @transaction.atomic
-def generate_monthly_invoices(*, tenant, month, year, due_date=None, user=None, course=None, batch=None, student=None, enrollment=None):
+def generate_monthly_invoices(*, tenant, month, year, due_date=None, user=None, course=None, batch=None, student=None, enrollment=None, period_calendar=None):
     from .services.billing_service import generate_monthly_invoices as generate
 
     return generate(
@@ -134,6 +135,7 @@ def generate_monthly_invoices(*, tenant, month, year, due_date=None, user=None, 
         batch=batch,
         student=student,
         enrollment=enrollment,
+        period_calendar=period_calendar,
     )
 
 
@@ -270,12 +272,42 @@ def create_stationery_purchase(*, tenant, items, discount, tax, payment_status, 
     return purchase
 
 
+def _calendar_month_start(tenant, module, today):
+    if get_module_calendar(tenant, module) == CALENDAR_SHAMSI:
+        year, month, _ = to_shamsi(today)
+        return to_gregorian(year, month, 1)
+    return today.replace(day=1)
+
+
+def _calendar_year_range(tenant, module, today):
+    if get_module_calendar(tenant, module) == CALENDAR_SHAMSI:
+        year, _, _ = to_shamsi(today)
+        return to_gregorian(year, 1, 1), to_gregorian(year + 1, 1, 1), year
+    return today.replace(month=1, day=1), today.replace(year=today.year + 1, month=1, day=1), today.year
+
+
+def _monthly_payment_revenue(tenant, today):
+    start, end, year = _calendar_year_range(tenant, "fees", today)
+    queryset = Payment.objects.filter(tenant=tenant, payment_date__gte=start, payment_date__lt=end)
+    if get_module_calendar(tenant, "fees") != CALENDAR_SHAMSI:
+        return list(queryset.values("payment_date__month").annotate(total=Sum("amount_paid")).order_by("payment_date__month"))
+
+    totals = {}
+    for payment in queryset.values("payment_date", "amount_paid"):
+        _, month, _ = to_shamsi(payment["payment_date"])
+        totals[month] = totals.get(month, Decimal("0")) + (payment["amount_paid"] or Decimal("0"))
+    return [{"payment_date__month": month, "total": total, "year": year} for month, total in sorted(totals.items())]
+
+
 def dashboard_payload(tenant, user):
     refresh_invoice_statuses(tenant)
     today = timezone.localdate()
-    month_start = today.replace(day=1)
-    total_attendance_month = Attendance.objects.filter(tenant=tenant, date__gte=month_start).count()
-    present_attendance_month = Attendance.objects.filter(tenant=tenant, date__gte=month_start, is_present=True).count()
+    attendance_month_start = _calendar_month_start(tenant, "attendance", today)
+    fees_month_start = _calendar_month_start(tenant, "fees", today)
+    inventory_month_start = _calendar_month_start(tenant, "inventory", today)
+    _, _, invoice_year = _calendar_year_range(tenant, "invoices", today)
+    total_attendance_month = Attendance.objects.filter(tenant=tenant, date__gte=attendance_month_start).count()
+    present_attendance_month = Attendance.objects.filter(tenant=tenant, date__gte=attendance_month_start, is_present=True).count()
     cards = {
         "students": Students.objects.filter(tenant=tenant).count(),
         "teachers": Teachers.objects.filter(tenant=tenant).count(),
@@ -285,11 +317,11 @@ def dashboard_payload(tenant, user):
         "courses": Course.objects.filter(tenant=tenant).count(),
         "todays_attendance": Attendance.objects.filter(tenant=tenant, date=today, is_present=True).count(),
         "monthly_attendance_percentage": round((present_attendance_month / total_attendance_month) * 100, 2) if total_attendance_month else 0,
-        "collected_fees": Payment.objects.filter(tenant=tenant, payment_date__gte=month_start).aggregate(total=Sum("amount_paid"))["total"] or 0,
-        "monthly_revenue": Payment.objects.filter(tenant=tenant, payment_date__gte=month_start).aggregate(total=Sum("amount_paid"))["total"] or 0,
+        "collected_fees": Payment.objects.filter(tenant=tenant, payment_date__gte=fees_month_start).aggregate(total=Sum("amount_paid"))["total"] or 0,
+        "monthly_revenue": Payment.objects.filter(tenant=tenant, payment_date__gte=fees_month_start).aggregate(total=Sum("amount_paid"))["total"] or 0,
         "pending_fees": Invoice.objects.filter(tenant=tenant, status__in=[Invoice.Status.PENDING, Invoice.Status.PARTIAL]).aggregate(total=Sum("balance"))["total"] or 0,
         "overdue_fees": Invoice.objects.filter(tenant=tenant, status=Invoice.Status.OVERDUE).aggregate(total=Sum("balance"))["total"] or 0,
-        "stationery_sales": StationeryPurchase.objects.filter(tenant=tenant, date__gte=month_start).aggregate(total=Sum("total"))["total"] or 0,
+        "stationery_sales": StationeryPurchase.objects.filter(tenant=tenant, date__gte=inventory_month_start).aggregate(total=Sum("total"))["total"] or 0,
         "inventory_value": StationeryItem.objects.filter(tenant=tenant).aggregate(total=Sum(F("quantity") * F("selling_price"), output_field=DecimalField()))["total"] or 0,
         "inventory_alerts": StationeryItem.objects.filter(tenant=tenant, status__in=[StationeryItem.Status.LOW_STOCK, StationeryItem.Status.OUT_OF_STOCK]).count(),
         "low_stock_items": StationeryItem.objects.filter(tenant=tenant, status__in=[StationeryItem.Status.LOW_STOCK, StationeryItem.Status.OUT_OF_STOCK]).count(),
@@ -298,17 +330,17 @@ def dashboard_payload(tenant, user):
     }
     return {
         "cards": cards,
-        "monthly_revenue": list(Payment.objects.filter(tenant=tenant, payment_date__year=today.year).values("payment_date__month").annotate(total=Sum("amount_paid")).order_by("payment_date__month")),
-        "attendance_trend": list(Attendance.objects.filter(tenant=tenant, date__gte=today.replace(day=max(1, today.day - 14))).values("date").annotate(present=Count("id", filter=Q(is_present=True)), absent=Count("id", filter=Q(is_present=False))).order_by("date")),
-        "fee_collection": list(Invoice.objects.filter(tenant=tenant, year=today.year).values("month").annotate(expected=Sum("final_amount"), collected=Sum("paid_amount"), outstanding=Sum("balance")).order_by("month")),
+        "monthly_revenue": _monthly_payment_revenue(tenant, today),
+        "attendance_trend": convert_rows_dates(list(Attendance.objects.filter(tenant=tenant, date__gte=today.replace(day=max(1, today.day - 14))).values("date").annotate(present=Count("id", filter=Q(is_present=True)), absent=Count("id", filter=Q(is_present=False))).order_by("date")), tenant, "attendance"),
+        "fee_collection": list(Invoice.objects.filter(tenant=tenant, year=invoice_year).values("month").annotate(expected=Sum("final_amount"), collected=Sum("paid_amount"), outstanding=Sum("balance")).order_by("month")),
         "assessment_performance": list(AssessmentResult.objects.filter(tenant=tenant).values("assessment__title").annotate(avg_percentage=Sum("percentage") / Count("id")).order_by("assessment__title")[:12]),
         "student_growth": list(Students.objects.filter(tenant=tenant).values("enrollment_date__month").annotate(total=Count("id")).order_by("enrollment_date__month")),
-        "inventory_movement": list(InventoryTransaction.objects.filter(tenant=tenant, created_at__gte=month_start).values("transaction_type").annotate(total=Sum("quantity")).order_by("transaction_type")),
-        "recent_payments": list(Payment.objects.filter(tenant=tenant).values("receipt_number", "invoice__student__name", "amount_paid", "payment_date")[:8]),
-        "recent_admissions": list(Students.objects.filter(tenant=tenant).values("id", "name", "role_number", "enrollment_date").order_by("-enrollment_date")[:8]),
-        "recent_assessments": list(Assessment.objects.filter(tenant=tenant).values("id", "title", "status", "assessment_date", "course__name", "batch__name").order_by("-created_at")[:8]),
-        "notifications": list(Notification.objects.filter(tenant=tenant, recipient=user).values("title", "message", "notification_type", "created_at")[:8]),
+        "inventory_movement": list(InventoryTransaction.objects.filter(tenant=tenant, created_at__gte=inventory_month_start).values("transaction_type").annotate(total=Sum("quantity")).order_by("transaction_type")),
+        "recent_payments": convert_rows_dates(list(Payment.objects.filter(tenant=tenant).values("receipt_number", "invoice__student__name", "amount_paid", "payment_date")[:8]), tenant, "fees"),
+        "recent_admissions": convert_rows_dates(list(Students.objects.filter(tenant=tenant).values("id", "name", "role_number", "enrollment_date").order_by("-enrollment_date")[:8]), tenant, "students"),
+        "recent_assessments": convert_rows_dates(list(Assessment.objects.filter(tenant=tenant).values("id", "title", "status", "assessment_date", "course__name", "batch__name").order_by("-created_at")[:8]), tenant, "assessments"),
+        "notifications": convert_rows_dates(list(Notification.objects.filter(tenant=tenant, recipient=user).values("title", "message", "notification_type", "created_at")[:8]), tenant, "notifications"),
         "low_stock": list(StationeryItem.objects.filter(tenant=tenant, status__in=[StationeryItem.Status.LOW_STOCK, StationeryItem.Status.OUT_OF_STOCK]).values("id", "item_name", "quantity", "minimum_stock", "status")[:8]),
-        "pending_fee_list": list(Invoice.objects.filter(tenant=tenant, status__in=[Invoice.Status.PENDING, Invoice.Status.PARTIAL, Invoice.Status.OVERDUE]).values("invoice_number", "student__name", "balance", "due_date", "status")[:8]),
-        "upcoming_exams": list(Assessment.objects.filter(tenant=tenant, assessment_date__gte=today).values("id", "title", "assessment_date", "course__name", "batch__name", "status")[:8]),
+        "pending_fee_list": convert_rows_dates(list(Invoice.objects.filter(tenant=tenant, status__in=[Invoice.Status.PENDING, Invoice.Status.PARTIAL, Invoice.Status.OVERDUE]).values("invoice_number", "student__name", "balance", "due_date", "status")[:8]), tenant, "invoices"),
+        "upcoming_exams": convert_rows_dates(list(Assessment.objects.filter(tenant=tenant, assessment_date__gte=today).values("id", "title", "assessment_date", "course__name", "batch__name", "status")[:8]), tenant, "assessments"),
     }

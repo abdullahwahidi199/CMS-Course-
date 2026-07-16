@@ -14,6 +14,7 @@ import {
 import { Link } from "react-router-dom";
 import DataTable from "../shared/DataTable";
 import PageHeader from "../shared/PageHeader";
+import CalendarDatePicker from "../shared/CalendarDatePicker";
 import instance from "../../api/axiosInstance";
 import { formatApiError } from "../../utils/apiErrors";
 
@@ -657,13 +658,11 @@ function PromoteStudentModal({
           </Field>
 
           <Field label="Promotion Date">
-            <input
+            <CalendarDatePicker
               required
-              type="date"
+              module="students"
               value={form.promotion_date}
-              onChange={(event) =>
-                setForm({ ...form, promotion_date: event.target.value })
-              }
+              onChange={(value) => setForm({ ...form, promotion_date: value })}
               className={inputClass()}
             />
           </Field>
@@ -1043,23 +1042,19 @@ export default function StudentManagementPage() {
           </Field>
 
           <Field label="Enrollment From">
-            <input
-              type="date"
+            <CalendarDatePicker
+              module="students"
               value={filters.enrollment_start}
-              onChange={(event) =>
-                updateFilter("enrollment_start", event.target.value)
-              }
+              onChange={(value) => updateFilter("enrollment_start", value)}
               className={inputClass()}
             />
           </Field>
 
           <Field label="Enrollment To">
-            <input
-              type="date"
+            <CalendarDatePicker
+              module="students"
               value={filters.enrollment_end}
-              onChange={(event) =>
-                updateFilter("enrollment_end", event.target.value)
-              }
+              onChange={(value) => updateFilter("enrollment_end", value)}
               className={inputClass()}
             />
           </Field>
@@ -1167,6 +1162,7 @@ export default function StudentManagementPage() {
           { label: "Restore", onClick: () => lifecycle(row, "restore") },
           { label: "Deactivate", onClick: () => lifecycle(row, "deactivate") },
         ]}
+        calendarModule="students"
       />
 
       {editing ? (

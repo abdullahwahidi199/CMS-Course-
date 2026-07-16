@@ -5,6 +5,12 @@ import { ArrowRight, Eye, EyeOff, GraduationCap, Lock, ShieldCheck, User } from 
 import instance from "../api/axiosInstance";
 import { firstAccessiblePath, firstAccessibleTeacherPath } from "../routes/appRoutes";
 
+const SUPER_ADMIN_DASHBOARD = "/super-admin/dashboard";
+
+function isSuperAdmin(roleSlug) {
+  return roleSlug === "super-admin" || roleSlug === "super_admin";
+}
+
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -18,7 +24,9 @@ export default function LoginPage() {
   useEffect(() => {
     if (initializing || !user) return;
     const roleSlug = user.role_slug || user.role_details?.slug;
-    if (roleSlug === "teacher") {
+    if (isSuperAdmin(roleSlug)) {
+      navigate(SUPER_ADMIN_DASHBOARD, { replace: true });
+    } else if (roleSlug === "teacher") {
       navigate(firstAccessibleTeacherPath(permissions), { replace: true });
     } else if (roleSlug === "student") {
       navigate("/student/dashboard", { replace: true });
@@ -46,7 +54,9 @@ export default function LoginPage() {
       }
 
       const roleSlug = profile.role_slug || profile.role_details?.slug;
-      if (roleSlug === "teacher") {
+      if (isSuperAdmin(roleSlug)) {
+        navigate(SUPER_ADMIN_DASHBOARD, { replace: true });
+      } else if (roleSlug === "teacher") {
         navigate(firstAccessibleTeacherPath(profile.permissions || []), { replace: true });
       } else if (roleSlug === "student") {
         navigate("/student/dashboard");

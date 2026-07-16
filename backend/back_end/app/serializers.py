@@ -1,18 +1,90 @@
 from rest_framework import serializers
+from django.utils import timezone
 from django.db.models import Sum
 from .models import Students,Teachers,Events,Classes,Attendance,AttendanceSession,Staff,Expenses,ExpenseCategory,Budget,RecurringExpense,ExpenseHistory,RoomOfClass,User,Marks
 from .models import Course, Enrollment, Role
 from .models import Assignment,PromotionHistory,Submission,Tenant
 from .services.student_service import create_student, update_student
 from .services.teacher_service import create_teacher, update_teacher
+from .shamsi import CalendarModelSerializer, ShamsiDateField, tenant_calendar_settings
 
 
 
-class TenantSerializer(serializers.ModelSerializer):
+class TenantSerializer(CalendarModelSerializer):
+    calendar_settings = serializers.SerializerMethodField()
+    subscription_status = serializers.SerializerMethodField()
+    remaining_days = serializers.SerializerMethodField()
+
     class Meta:
         model = Tenant
         fields = "__all__"
-class AttendanceSerializer(serializers.ModelSerializer):
+
+    def get_calendar_settings(self, obj):
+        return tenant_calendar_settings(obj)
+
+    def _remaining_days(self, obj):
+        if not obj.subscription_expiry:
+            return None
+        return (obj.subscription_expiry - timezone.localdate()).days
+
+    def get_remaining_days(self, obj):
+        return self._remaining_days(obj)
+
+    def get_subscription_status(self, obj):
+        remaining_days = self._remaining_days(obj)
+        if remaining_days is None:
+            return "active"
+        if remaining_days < 0:
+            return "expired"
+        if remaining_days <= 7:
+            return "expiring_soon"
+        return "active"
+
+
+class SuperAdminTenantSerializer(serializers.ModelSerializer):
+    subscription_status = serializers.SerializerMethodField()
+    remaining_days = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Tenant
+        fields = [
+            "id",
+            "name",
+            "public_slug",
+            "public_site_enabled",
+            "logo",
+            "phone",
+            "email",
+            "address",
+            "is_active",
+            "subscription_expiry",
+            "subscription_price",
+            "subscription_notes",
+            "notification_settings",
+            "created_at",
+            "subscription_status",
+            "remaining_days",
+        ]
+
+    def _remaining_days(self, obj):
+        if not obj.subscription_expiry:
+            return None
+        return (obj.subscription_expiry - timezone.localdate()).days
+
+    def get_remaining_days(self, obj):
+        return self._remaining_days(obj)
+
+    def get_subscription_status(self, obj):
+        remaining_days = self._remaining_days(obj)
+        if remaining_days is None:
+            return "active"
+        if remaining_days < 0:
+            return "expired"
+        if remaining_days <= 7:
+            return "expiring_soon"
+        return "active"
+class AttendanceSerializer(CalendarModelSerializer):
+    calendar_module = "attendance"
     student_name = serializers.CharField(source="student.name", read_only=True)
     student_number = serializers.CharField(source="student.formatted_student_number", read_only=True)
     guardian_name = serializers.CharField(source="student.f_name", read_only=True)
@@ -26,7 +98,8 @@ class AttendanceSerializer(serializers.ModelSerializer):
         fields='__all__'
 
 
-class AttendanceSessionSerializer(serializers.ModelSerializer):
+class AttendanceSessionSerializer(CalendarModelSerializer):
+    calendar_module = "attendance"
     course_name = serializers.CharField(source="course.name", read_only=True)
     batch_name = serializers.CharField(source="batch.name", read_only=True)
     teacher_name = serializers.CharField(source="teacher.full_name", read_only=True)
@@ -63,7 +136,8 @@ class AttendanceSessionSerializer(serializers.ModelSerializer):
         return round((attended / total) * 100, 2) if total else 0
 
 
-class MarksSerializer(serializers.ModelSerializer):
+class MarksSerializer(CalendarModelSerializer):
+    calendar_module = "exams"
     class Meta:
         model=Marks
         fields='__all__'
@@ -72,12 +146,14 @@ class MarksSerializer(serializers.ModelSerializer):
 
 
 
-class SubmissionSerializer(serializers.ModelSerializer):
+class SubmissionSerializer(CalendarModelSerializer):
+    calendar_module = "assessments"
     class Meta:
         model = Submission
         fields = "__all__"
 
-class AssignmentSerializer(serializers.ModelSerializer):
+class AssignmentSerializer(CalendarModelSerializer):
+    calendar_module = "assessments"
     submissions = SubmissionSerializer(many=True, read_only=True)
 
     class Meta:
@@ -85,18 +161,19 @@ class AssignmentSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ("created_at", "created_by")
 
-class secondClassMiniSerializer(serializers.ModelSerializer):
+class secondClassMiniSerializer(CalendarModelSerializer):
     class Meta:
         model=Classes
         fields='__all__'
-class RoomMiniSerializer(serializers.ModelSerializer):
+class RoomMiniSerializer(CalendarModelSerializer):
     # classes=secondClassMiniSerializer(many=True,read_only=True)
     class Meta:
         model=RoomOfClass
         fields='__all__'
        
 
-class ClassesMiniSerialiser(serializers.ModelSerializer):
+class ClassesMiniSerialiser(CalendarModelSerializer):
+    calendar_module = "classes"
     # # student=StudentsSerializer(many=True,read_only=True)
     roomOfClass = serializers.PrimaryKeyRelatedField(
         queryset=RoomOfClass.objects.all(), required=False, allow_null=True
@@ -110,7 +187,8 @@ class ClassesMiniSerialiser(serializers.ModelSerializer):
         fields=['id','name','course','course_name','startDate','endDate','roomOfClass','start_time','end_time','roomOfClass_details','capacity','is_active','is_archived']
 
 
-class EnrollmentSerializer(serializers.ModelSerializer):
+class EnrollmentSerializer(CalendarModelSerializer):
+    calendar_module = "admissions"
     student_name = serializers.CharField(source="student.name", read_only=True)
     course_name = serializers.CharField(source="course.name", read_only=True)
     batch_name = serializers.CharField(source="batch.name", read_only=True)
@@ -121,7 +199,8 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         read_only_fields = ["tenant", "created_by", "created_at", "updated_at"]
 
 
-class PromotionHistorySerializer(serializers.ModelSerializer):
+class PromotionHistorySerializer(CalendarModelSerializer):
+    calendar_module = "students"
     student_name = serializers.CharField(source="student.name", read_only=True)
     student_number = serializers.CharField(source="student.formatted_student_number", read_only=True)
     old_class_name = serializers.CharField(source="old_class.name", read_only=True)
@@ -158,11 +237,12 @@ class PromotionHistorySerializer(serializers.ModelSerializer):
 class PromotionCreateSerializer(serializers.Serializer):
     student = serializers.IntegerField()
     new_batch = serializers.IntegerField()
-    promotion_date = serializers.DateField(required=False)
+    promotion_date = ShamsiDateField(required=False)
     remarks = serializers.CharField(required=False, allow_blank=True)
 
 
-class StudentsSerializer(serializers.ModelSerializer):
+class StudentsSerializer(CalendarModelSerializer):
+    calendar_module = "students"
     username = serializers.CharField(source="user.username", required=False)
     password = serializers.CharField(write_only=True, required=False, allow_blank=True)
     first_name = serializers.CharField(source="user.first_name", required=False)
@@ -246,7 +326,8 @@ class StudentsSerializer(serializers.ModelSerializer):
             **validated_data,
         )
 
-class TeachersSerializer(serializers.ModelSerializer):
+class TeachersSerializer(CalendarModelSerializer):
+    calendar_module = "teachers"
     username = serializers.CharField(source="user.username", required=False)
     password = serializers.CharField(write_only=True, required=False, allow_blank=True)
     user_is_active = serializers.BooleanField(source="user.is_active", read_only=True)
@@ -294,12 +375,13 @@ class TeachersSerializer(serializers.ModelSerializer):
             is_active=validated_data.get("is_active"),
         )
 
-class EventSerializer(serializers.ModelSerializer):
+class EventSerializer(CalendarModelSerializer):
+    calendar_module = "schedules"
     class Meta:
         model=Events
         fields=['id','title','discription','image','date']
 
-class UserSerializer(serializers.ModelSerializer):
+class UserSerializer(CalendarModelSerializer):
     teacher_profile = TeachersSerializer(read_only=True)
     student_profile = StudentsSerializer(read_only=True)
 
@@ -307,7 +389,8 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'username', 'role', 'role_slug', 'teacher_profile', 'student_profile']
 
-class ClassesSerializer(serializers.ModelSerializer):
+class ClassesSerializer(CalendarModelSerializer):
+    calendar_module = "classes"
     enrollments=EnrollmentSerializer(many=True, read_only=True)
     roomOfClass = serializers.PrimaryKeyRelatedField(
         queryset=RoomOfClass.objects.all(), required=False, allow_null=True
@@ -339,7 +422,8 @@ class ClassesSerializer(serializers.ModelSerializer):
         return obj.enrollments.filter(status=Enrollment.Status.ACTIVE).count()
 
 
-class CourseSerializer(serializers.ModelSerializer):
+class CourseSerializer(CalendarModelSerializer):
+    calendar_module = "classes"
     batches = ClassesMiniSerialiser(many=True, read_only=True)
     batch_count = serializers.SerializerMethodField()
     active_student_count = serializers.SerializerMethodField()
@@ -381,19 +465,20 @@ class CourseSerializer(serializers.ModelSerializer):
         return 0
 
 
-class StaffSerializer(serializers.ModelSerializer):
+class StaffSerializer(CalendarModelSerializer):
     class Meta:
         model=Staff
         fields='__all__'
 
-class ExpenseCategorySerializer(serializers.ModelSerializer):
+class ExpenseCategorySerializer(CalendarModelSerializer):
     class Meta:
         model=ExpenseCategory
         fields='__all__'
         read_only_fields=["tenant","created_at"]
 
 
-class ExpensesSerializer(serializers.ModelSerializer):
+class ExpensesSerializer(CalendarModelSerializer):
+    calendar_module = "expenses"
     category_name = serializers.CharField(source="category.name", read_only=True)
     created_by_username = serializers.CharField(source="created_by.username", read_only=True)
     approved_by_username = serializers.CharField(source="approved_by.username", read_only=True)
@@ -413,7 +498,8 @@ class ExpensesSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class BudgetSerializer(serializers.ModelSerializer):
+class BudgetSerializer(CalendarModelSerializer):
+    calendar_module = "expenses"
     category_name = serializers.CharField(source="category.name", read_only=True)
     spent_amount = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     remaining_amount = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
@@ -425,7 +511,8 @@ class BudgetSerializer(serializers.ModelSerializer):
         read_only_fields=["tenant","created_at","updated_at","spent_amount","remaining_amount","used_percentage"]
 
 
-class RecurringExpenseSerializer(serializers.ModelSerializer):
+class RecurringExpenseSerializer(CalendarModelSerializer):
+    calendar_module = "expenses"
     category_name = serializers.CharField(source="category.name", read_only=True)
 
     class Meta:
@@ -433,11 +520,12 @@ class RecurringExpenseSerializer(serializers.ModelSerializer):
         fields='__all__'
         read_only_fields=["tenant","created_at"]
     
-class ExpenseHistorySerializer(serializers.ModelSerializer):
+class ExpenseHistorySerializer(CalendarModelSerializer):
+    calendar_module = "expenses"
     class Meta:
         model=ExpenseHistory
         fields='__all__'
-class RoomSerializer(serializers.ModelSerializer):
+class RoomSerializer(CalendarModelSerializer):
     classes=ClassesSerializer(many=True,required=False)
     class Meta:
         model=RoomOfClass
@@ -483,7 +571,7 @@ class AdmissionAccountSerializer(serializers.Serializer):
 
 class AdmissionAcademicSerializer(serializers.Serializer):
     batch = serializers.IntegerField()
-    enrollment_date = serializers.DateField(required=False)
+    enrollment_date = ShamsiDateField(required=False)
     status = serializers.CharField(default="active")
 
 class AdmissionSerializer(serializers.Serializer):

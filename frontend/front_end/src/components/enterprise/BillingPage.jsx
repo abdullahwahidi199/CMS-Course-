@@ -6,7 +6,11 @@ import StatCard from "../shared/StatCard";
 import { apiCreate, apiPost, useApiResource } from "../../hooks/useApiResource";
 import instance from "../../api/axiosInstance";
 import ReceiptPrintModal from "../reciept";
+import CalendarDatePicker from "../shared/CalendarDatePicker";
+import { useCalendar } from "../../hooks/useCalendar";
+import { toShamsi } from "../../utils/calendar";
 const current = new Date();
+const currentShamsi = toShamsi(current);
 const initialPlan = {
   course: "",
   batch: "",
@@ -81,6 +85,7 @@ async function downloadFile(endpoint, filename) {
 }
 
 export default function BillingPage() {
+  const invoiceCalendar = useCalendar("invoices");
   const [activeTab, setActiveTab] = useState("Invoices");
   const [planForm, setPlanForm] = useState(initialPlan);
   const [generateForm, setGenerateForm] = useState({
@@ -247,6 +252,13 @@ export default function BillingPage() {
   useEffect(() => {
     getTenant();
   }, []);
+
+  useEffect(() => {
+    const period = invoiceCalendar.calendar === "shamsi"
+      ? { month: currentShamsi.month, year: currentShamsi.year }
+      : { month: current.getMonth() + 1, year: current.getFullYear() };
+    setGenerateForm((form) => ({ ...form, ...period }));
+  }, [invoiceCalendar.calendar]);
 
   const invoiceColumns = [
     { key: "invoice_number", label: "Invoice" },
@@ -421,6 +433,7 @@ export default function BillingPage() {
           rows={invoiceRows}
           loading={invoices.loading}
           error={invoices.error}
+          calendarModule="invoices"
           actions={(row) => [
             {
               label: "Collect",
@@ -635,7 +648,7 @@ export default function BillingPage() {
             className="grid gap-4 md:grid-cols-3"
             onSubmit={generateInvoices}
           >
-            <Field label="Month">
+            <Field label={`Month (${invoiceCalendar.calendar === "shamsi" ? "Shamsi" : "Gregorian"})`}>
               <Input
                 required
                 type="number"
@@ -647,11 +660,11 @@ export default function BillingPage() {
                 }
               />
             </Field>
-            <Field label="Year">
+            <Field label={`Year (${invoiceCalendar.calendar === "shamsi" ? "Shamsi" : "Gregorian"})`}>
               <Input
                 required
                 type="number"
-                min="2000"
+                min={invoiceCalendar.calendar === "shamsi" ? "1200" : "2000"}
                 value={generateForm.year}
                 onChange={(e) =>
                   setGenerateForm({ ...generateForm, year: e.target.value })
@@ -659,12 +672,10 @@ export default function BillingPage() {
               />
             </Field>
             <Field label="Due Date">
-              <Input
-                type="date"
+              <CalendarDatePicker
+                module="invoices"
                 value={generateForm.due_date}
-                onChange={(e) =>
-                  setGenerateForm({ ...generateForm, due_date: e.target.value })
-                }
+                onChange={(value) => setGenerateForm({ ...generateForm, due_date: value })}
               />
             </Field>
             <Field label="Scope">
@@ -935,6 +946,7 @@ export default function BillingPage() {
             rows={feePlans.results}
             loading={feePlans.loading}
             error={feePlans.error}
+            calendarModule="fees"
           />
           <DataTable
             title="Enrollment Billing Profiles"
@@ -964,6 +976,7 @@ export default function BillingPage() {
             rows={billingProfiles.results}
             loading={billingProfiles.loading}
             error={billingProfiles.error}
+            calendarModule="fees"
           />
         </div>
       ) : null}
@@ -975,6 +988,7 @@ export default function BillingPage() {
           rows={paymentRows}
           loading={payments.loading}
           error={payments.error}
+          calendarModule="fees"
           actions={(row) => [
             {
               label: "Receipt",
@@ -1009,6 +1023,7 @@ export default function BillingPage() {
             rows={ledger.results}
             loading={ledger.loading}
             error={ledger.error}
+            calendarModule="fees"
           />
         </div>
       ) : null}

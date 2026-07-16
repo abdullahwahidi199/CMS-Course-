@@ -23,6 +23,7 @@ from .models import (
     Students,
     Teachers,
 )
+from .shamsi import CALENDAR_GREGORIAN, CALENDAR_SHAMSI, CalendarModelSerializer, ShamsiDateField, get_module_calendar
 
 
 class ChoiceFieldSerializer(serializers.Serializer):
@@ -30,7 +31,8 @@ class ChoiceFieldSerializer(serializers.Serializer):
     label = serializers.CharField()
 
 
-class AssessmentResultSerializer(serializers.ModelSerializer):
+class AssessmentResultSerializer(CalendarModelSerializer):
+    calendar_module = "assessments"
     student_name = serializers.CharField(source="student.name", read_only=True)
     course_name = serializers.CharField(source="course.name", read_only=True)
     batch_name = serializers.CharField(source="batch.name", read_only=True)
@@ -87,7 +89,8 @@ class AssessmentResultSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class AssessmentSerializer(serializers.ModelSerializer):
+class AssessmentSerializer(CalendarModelSerializer):
+    calendar_module = "assessments"
     course_name = serializers.CharField(source="course.name", read_only=True)
     batch_name = serializers.CharField(source="batch.name", read_only=True)
     teacher_name = serializers.CharField(source="teacher.full_name", read_only=True)
@@ -152,7 +155,8 @@ class BulkAssessmentResultSerializer(serializers.Serializer):
         return value
 
 
-class FeePlanSerializer(serializers.ModelSerializer):
+class FeePlanSerializer(CalendarModelSerializer):
+    calendar_module = "fees"
     course_name = serializers.CharField(source="course.name", read_only=True)
     batch_name = serializers.CharField(source="batch.name", read_only=True)
 
@@ -182,7 +186,8 @@ class FeePlanSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class EnrollmentBillingProfileSerializer(serializers.ModelSerializer):
+class EnrollmentBillingProfileSerializer(CalendarModelSerializer):
+    calendar_module = "fees"
     student_name = serializers.CharField(source="enrollment.student.name", read_only=True)
     course_name = serializers.CharField(source="enrollment.course.name", read_only=True)
     batch_name = serializers.CharField(source="enrollment.batch.name", read_only=True)
@@ -203,7 +208,8 @@ class EnrollmentBillingProfileSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class PaymentSerializer(serializers.ModelSerializer):
+class PaymentSerializer(CalendarModelSerializer):
+    calendar_module = "fees"
     invoice_number = serializers.CharField(source="invoice.invoice_number", read_only=True)
     student_name = serializers.CharField(source="invoice.student.name", read_only=True)
     course_name = serializers.CharField(source="invoice.course.name", read_only=True)
@@ -240,7 +246,8 @@ class PaymentSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class InvoiceSerializer(serializers.ModelSerializer):
+class InvoiceSerializer(CalendarModelSerializer):
+    calendar_module = "invoices"
     student_name = serializers.CharField(source="student.name", read_only=True)
     course_name = serializers.CharField(source="course.name", read_only=True)
     batch_name = serializers.CharField(source="batch.name", read_only=True)
@@ -297,12 +304,23 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
 class GenerateInvoicesSerializer(serializers.Serializer):
     month = serializers.IntegerField(min_value=1, max_value=12)
-    year = serializers.IntegerField(min_value=2000)
-    due_date = serializers.DateField(required=False, allow_null=True)
+    year = serializers.IntegerField(min_value=1200)
+    due_date = ShamsiDateField(required=False, allow_null=True)
     course = serializers.PrimaryKeyRelatedField(queryset=Course.objects.all(), required=False, allow_null=True)
     batch = serializers.PrimaryKeyRelatedField(queryset=Classes.objects.all(), required=False, allow_null=True)
     student = serializers.PrimaryKeyRelatedField(queryset=Students.objects.all(), required=False, allow_null=True)
     enrollment = serializers.PrimaryKeyRelatedField(queryset=Enrollment.objects.all(), required=False, allow_null=True)
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        calendar_type = get_module_calendar(getattr(getattr(request, "user", None), "tenant", None), "invoices")
+        year = int(attrs.get("year"))
+        if calendar_type == CALENDAR_GREGORIAN and year < 2000:
+            raise serializers.ValidationError({"year": "Gregorian invoice year must be 2000 or later."})
+        if calendar_type == CALENDAR_SHAMSI and not 1200 <= year <= 1700:
+            raise serializers.ValidationError({"year": "Shamsi invoice year must be between 1200 and 1700."})
+        attrs["period_calendar"] = calendar_type
+        return attrs
 
     def validate_due_date(self, value):
         if value and value < timezone.localdate():
@@ -310,7 +328,8 @@ class GenerateInvoicesSerializer(serializers.Serializer):
         return value
 
 
-class StudentLedgerEntrySerializer(serializers.ModelSerializer):
+class StudentLedgerEntrySerializer(CalendarModelSerializer):
+    calendar_module = "fees"
     student_name = serializers.CharField(source="student.name", read_only=True)
 
     class Meta:
@@ -319,7 +338,8 @@ class StudentLedgerEntrySerializer(serializers.ModelSerializer):
         read_only_fields = ["tenant", "created_by", "created_at", "updated_at"]
 
 
-class StationeryItemSerializer(serializers.ModelSerializer):
+class StationeryItemSerializer(CalendarModelSerializer):
+    calendar_module = "inventory"
     class Meta:
         model = StationeryItem
         fields = "__all__"
@@ -341,7 +361,8 @@ class StationeryItemSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class InventoryTransactionSerializer(serializers.ModelSerializer):
+class InventoryTransactionSerializer(CalendarModelSerializer):
+    calendar_module = "inventory"
     item_name = serializers.CharField(source="item.item_name", read_only=True)
 
     class Meta:
@@ -357,7 +378,8 @@ class StockMoveSerializer(serializers.Serializer):
     notes = serializers.CharField(required=False, allow_blank=True)
 
 
-class StationeryPurchaseItemSerializer(serializers.ModelSerializer):
+class StationeryPurchaseItemSerializer(CalendarModelSerializer):
+    calendar_module = "inventory"
     item_name = serializers.CharField(source="item.item_name", read_only=True)
 
     class Meta:
@@ -366,7 +388,8 @@ class StationeryPurchaseItemSerializer(serializers.ModelSerializer):
         read_only_fields = ["total"]
 
 
-class StationeryPurchaseSerializer(serializers.ModelSerializer):
+class StationeryPurchaseSerializer(CalendarModelSerializer):
+    calendar_module = "inventory"
     items = StationeryPurchaseItemSerializer(many=True)
 
     class Meta:
@@ -380,7 +403,8 @@ class StationeryPurchaseSerializer(serializers.ModelSerializer):
         return value
 
 
-class NotificationSerializer(serializers.ModelSerializer):
+class NotificationSerializer(CalendarModelSerializer):
+    calendar_module = "notifications"
     class Meta:
         model = Notification
         fields = "__all__"

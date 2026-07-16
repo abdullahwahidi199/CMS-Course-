@@ -3,6 +3,7 @@ import { CheckCircle, Lock, Printer, RefreshCcw, Save, Search, ShieldCheck } fro
 import DataTable from "./shared/DataTable";
 import PageHeader from "./shared/PageHeader";
 import StatCard from "./shared/StatCard";
+import CalendarDatePicker from "./shared/CalendarDatePicker";
 import instance from "../api/axiosInstance";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -219,7 +220,7 @@ export default function Attendance() {
         </label>
         <label className="block text-sm">
           <span className="mb-1 block font-medium text-gray-700">Date</span>
-          <input type="date" className={inputClass()} value={filters.date} onChange={(event) => setFilters({ ...filters, date: event.target.value })} />
+          <CalendarDatePicker module="attendance" className={inputClass()} value={filters.date} onChange={(value) => setFilters({ ...filters, date: value })} />
         </label>
         <label className="block text-sm">
           <span className="mb-1 block font-medium text-gray-700">Session Topic</span>
@@ -252,7 +253,7 @@ export default function Attendance() {
             <Search size={16} className="text-gray-400" />
             <input className="w-full outline-none" placeholder="Search students" value={query} onChange={(event) => setQuery(event.target.value)} />
           </label>
-          <DataTable title="Student Attendance" columns={columns} rows={visibleRecords} loading={false} pageSize={20} />
+          <DataTable title="Student Attendance" columns={columns} rows={visibleRecords} loading={false} pageSize={20} calendarModule="attendance" />
         </section>
       ) : null}
 
@@ -279,6 +280,7 @@ export default function Attendance() {
             },
           },
         ]}
+        calendarModule="attendance"
       />
     </div>
   );

@@ -8,17 +8,18 @@ from rest_framework import serializers
 from .models import Role, RBACPermission, Tenant
 from .rbac import allowed_menus, effective_permission_codes, expand_legacy_classes_codes, grouped_permissions
 from .serializers import StudentsSerializer, TeachersSerializer, TenantSerializer
+from .shamsi import CalendarModelSerializer
 
 User = get_user_model()
 
 
-class PermissionSerializer(serializers.ModelSerializer):
+class PermissionSerializer(CalendarModelSerializer):
     class Meta:
         model = RBACPermission
         fields = ["id", "module", "action", "code", "label", "description", "is_active"]
 
 
-class RoleSerializer(serializers.ModelSerializer):
+class RoleSerializer(CalendarModelSerializer):
     permissions = serializers.PrimaryKeyRelatedField(queryset=RBACPermission.objects.all(), many=True, required=False)
     permission_codes = serializers.SerializerMethodField()
     user_count = serializers.IntegerField(read_only=True)
@@ -50,7 +51,7 @@ class RoleSerializer(serializers.ModelSerializer):
         return sorted(expand_legacy_classes_codes(obj.permissions.filter(is_active=True).values_list("code", flat=True)))
 
 
-class UserManagementSerializer(serializers.ModelSerializer):
+class UserManagementSerializer(CalendarModelSerializer):
     role_name = serializers.CharField(source="role.name", read_only=True)
     role_slug = serializers.CharField(source="role.slug", read_only=True)
     tenant_name = serializers.CharField(source="tenant.name", read_only=True)
@@ -100,7 +101,7 @@ class UserManagementSerializer(serializers.ModelSerializer):
         return instance
 
 
-class CurrentUserSerializer(serializers.ModelSerializer):
+class CurrentUserSerializer(CalendarModelSerializer):
     tenant = TenantSerializer(read_only=True)
     role_details = RoleSerializer(source="role", read_only=True)
     role_slug = serializers.CharField(source="role.slug", read_only=True)
@@ -182,10 +183,21 @@ class CurrentUserSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class ProfileUpdateSerializer(serializers.ModelSerializer):
+class ProfileUpdateSerializer(CalendarModelSerializer):
     class Meta:
         model = User
-        fields = ["first_name", "last_name", "email", "phone", "avatar"]
+        fields = ["username", "first_name", "last_name", "email", "phone", "avatar"]
+
+    def validate_username(self, value):
+        username = (value or "").strip()
+        if not username:
+            raise serializers.ValidationError("Username is required.")
+        queryset = User.objects.filter(username__iexact=username)
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():
+            raise serializers.ValidationError("This username is already taken.")
+        return username
 
 
 class ChangePasswordSerializer(serializers.Serializer):

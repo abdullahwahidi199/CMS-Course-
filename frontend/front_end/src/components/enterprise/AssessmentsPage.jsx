@@ -3,6 +3,7 @@ import { FileDown, FileUp, Save, Send, SlidersHorizontal, X } from "lucide-react
 import DataTable from "../shared/DataTable";
 import PageHeader from "../shared/PageHeader";
 import StatCard from "../shared/StatCard";
+import CalendarDatePicker from "../shared/CalendarDatePicker";
 import { apiCreate, apiDelete, apiGet, apiPost, apiUpdate, useApiResource } from "../../hooks/useApiResource";
 
 const emptyForm = {
@@ -14,7 +15,7 @@ const emptyForm = {
   assessment_type: "quiz",
   maximum_marks: "100",
   passing_marks: "50",
-  assessment_date: new Date().toISOString().slice(0, 10),
+  assessment_date: "",
   status: "draft",
 };
 
@@ -343,10 +344,10 @@ export default function AssessmentsPage() {
             </select>
           </Field>
           <Field label="From date">
-            <input type="date" className={inputClass()} value={serverFilters.date_from} onChange={(event) => setServerFilters((current) => ({ ...current, date_from: event.target.value }))} />
+            <CalendarDatePicker module="assessments" className={inputClass()} value={serverFilters.date_from} onChange={(value) => setServerFilters((current) => ({ ...current, date_from: value }))} />
           </Field>
           <Field label="To date">
-            <input type="date" className={inputClass()} value={serverFilters.date_to} onChange={(event) => setServerFilters((current) => ({ ...current, date_to: event.target.value }))} />
+            <CalendarDatePicker module="assessments" className={inputClass()} value={serverFilters.date_to} onChange={(value) => setServerFilters((current) => ({ ...current, date_to: value }))} />
           </Field>
         </div>
       </section>
@@ -377,7 +378,7 @@ export default function AssessmentsPage() {
             </select>
           </Field>
           <Field label="Assessment Date">
-            <input type="date" className={inputClass()} value={form.assessment_date} onChange={(event) => setValue("assessment_date", event.target.value)} />
+            <CalendarDatePicker module="assessments" className={inputClass()} value={form.assessment_date} onChange={(value) => setValue("assessment_date", value)} />
           </Field>
           <Field label="Maximum Marks">
             <input type="number" min="1" className={inputClass()} value={form.maximum_marks} onChange={(event) => setValue("maximum_marks", event.target.value)} />
@@ -408,6 +409,7 @@ export default function AssessmentsPage() {
         rows={filteredAssessments}
         loading={assessments.loading}
         error={assessments.error}
+        calendarModule="assessments"
         bulkActions={[{ label: "Archive", onClick: (rows) => Promise.all(rows.map((row) => runAssessmentAction(row, "archive", "Assessments archived."))) }]}
         actions={(row) => [
           { label: "Details", onClick: () => setSelectedAssessment(row) },
@@ -490,7 +492,7 @@ export default function AssessmentsPage() {
                 </Field>
               </div>
             </div>
-            <DataTable title="Report Cards" columns={resultColumns} rows={resultRows} loading={false} empty="No marks saved yet" />
+            <DataTable title="Report Cards" columns={resultColumns} rows={resultRows} loading={false} empty="No marks saved yet" calendarModule="assessments" />
             <button className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700" onClick={() => window.print()}>
               <FileDown size={16} /> Print Report Cards
             </button>

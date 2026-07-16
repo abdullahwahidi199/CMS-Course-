@@ -7,6 +7,7 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from ..models import Enrollment, EnrollmentBillingProfile, FeePlan, Invoice, Notification, Payment, StudentLedgerEntry
+from ..shamsi import CALENDAR_SHAMSI, shamsi_month_length, to_gregorian
 from .notification_service import notify_admins, send_notification
 
 
@@ -144,9 +145,18 @@ def discount_for(profile, base_amount):
     return min(amount, allowed) if allowed > 0 else amount
 
 
-def due_date_for(profile, month, year, due_date=None):
+def period_start_date(month, year, period_calendar=None):
+    if period_calendar == CALENDAR_SHAMSI:
+        return to_gregorian(year, month, 1)
+    return date(year, month, 1)
+
+
+def due_date_for(profile, month, year, due_date=None, period_calendar=None):
     if due_date:
         return due_date
+    if period_calendar == CALENDAR_SHAMSI:
+        day = min(int(profile.due_day or 5), shamsi_month_length(year, month))
+        return to_gregorian(year, month, day)
     day = min(int(profile.due_day or 5), monthrange(year, month)[1])
     return date(year, month, day)
 
@@ -161,7 +171,7 @@ def previous_balance_for(enrollment, month, year):
     )
 
 
-def invoice_totals(profile, month, year):
+def invoice_totals(profile, month, year, period_calendar=None):
     monthly_fee = money(profile.monthly_fee)
     one_time = Decimal("0.00")
     has_prior_invoice = (
@@ -176,7 +186,7 @@ def invoice_totals(profile, month, year):
     previous = Decimal("0.00")
     today = timezone.localdate()
     late_fee = Decimal("0.00")
-    planned_due = due_date_for(profile, month, year)
+    planned_due = due_date_for(profile, month, year, period_calendar=period_calendar)
     if today > planned_due and (today - planned_due).days > int(profile.grace_period_days or 0):
         late_fee = money(profile.late_fee_amount)
     total = base - discount + late_fee
@@ -273,20 +283,22 @@ def update_unpaid_invoice_totals(invoice, totals, due_date, user=None):
 
 
 @transaction.atomic
-def generate_invoice_for_profile(*, profile, month, year, user=None, due_date=None):
+def generate_invoice_for_profile(*, profile, month, year, user=None, due_date=None, period_calendar=None):
     if profile.billing_status != EnrollmentBillingProfile.Status.ACTIVE:
         return None, False
-    if profile.billing_start_date and (profile.billing_start_date.year, profile.billing_start_date.month) > (year, month):
+    period_start = period_start_date(month, year, period_calendar)
+    period_key = (period_start.year, period_start.month)
+    if profile.billing_start_date and (profile.billing_start_date.year, profile.billing_start_date.month) > period_key:
         return None, False
-    if profile.billing_end_date and (profile.billing_end_date.year, profile.billing_end_date.month) < (year, month):
+    if profile.billing_end_date and (profile.billing_end_date.year, profile.billing_end_date.month) < period_key:
         return None, False
     if should_skip_invoice_for_cycle(profile, month, year):
         return None, False
 
     enrollment = profile.enrollment
     profile, _ = sync_billing_profile_to_current_plan(profile)
-    totals = invoice_totals(profile, month, year)
-    invoice_due_date = due_date_for(profile, month, year, due_date)
+    totals = invoice_totals(profile, month, year, period_calendar=period_calendar)
+    invoice_due_date = due_date_for(profile, month, year, due_date, period_calendar=period_calendar)
     invoice, created = Invoice.objects.get_or_create(
         tenant=enrollment.tenant,
         enrollment=enrollment,
@@ -352,7 +364,7 @@ def generate_invoice_for_profile(*, profile, month, year, user=None, due_date=No
     return invoice, created
 
 @transaction.atomic
-def generate_monthly_invoices(*, tenant, month, year, due_date=None, user=None, course=None, batch=None, student=None, enrollment=None):
+def generate_monthly_invoices(*, tenant, month, year, due_date=None, user=None, course=None, batch=None, student=None, enrollment=None, period_calendar=None):
     filters = {"tenant": tenant, "status": Enrollment.Status.ACTIVE, "is_archived": False}
     if course:
         filters["course_id"] = course
@@ -381,6 +393,7 @@ def generate_monthly_invoices(*, tenant, month, year, due_date=None, user=None, 
             month=invoice_month,
             year=invoice_year,
             due_date=due_date,
+            period_calendar=period_calendar,
             user=user,
         )
         if created:

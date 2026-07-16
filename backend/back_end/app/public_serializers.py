@@ -12,6 +12,7 @@ from .models import (
     PublicInquiry,
     TenantPublicSiteSettings,
 )
+from .shamsi import CalendarModelSerializer
 
 
 HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -34,7 +35,7 @@ def validate_public_submission(attrs, message_field="message"):
     return attrs
 
 
-class TenantPublicSiteSettingsSerializer(serializers.ModelSerializer):
+class TenantPublicSiteSettingsSerializer(CalendarModelSerializer):
     tenant_name = serializers.CharField(source="tenant.name", read_only=True)
     tenant_public_slug = serializers.CharField(source="tenant.public_slug", read_only=True)
     tenant_logo = serializers.ImageField(source="tenant.logo", read_only=True)
@@ -71,7 +72,7 @@ class TenantPublicSiteSettingsSerializer(serializers.ModelSerializer):
         return [str(item).strip() for item in value if str(item).strip()][:8]
 
 
-class PublicCourseProgramSerializer(serializers.ModelSerializer):
+class PublicCourseProgramSerializer(CalendarModelSerializer):
     class Meta:
         model = PublicCourseProgram
         fields = "__all__"
@@ -84,7 +85,7 @@ class PublicCourseProgramSerializer(serializers.ModelSerializer):
         return value
 
 
-class PublicAnnouncementSerializer(serializers.ModelSerializer):
+class PublicAnnouncementSerializer(CalendarModelSerializer):
     approved_comment_count = serializers.IntegerField(read_only=True)
 
     class Meta:
@@ -99,7 +100,7 @@ class PublicAnnouncementSerializer(serializers.ModelSerializer):
         return value
 
 
-class PublicAnnouncementCommentSerializer(serializers.ModelSerializer):
+class PublicAnnouncementCommentSerializer(CalendarModelSerializer):
     post_title = serializers.CharField(source="announcement.title", read_only=True)
 
     class Meta:
@@ -108,7 +109,7 @@ class PublicAnnouncementCommentSerializer(serializers.ModelSerializer):
         read_only_fields = ["tenant", "created_by", "created_at", "updated_at", "ip_address", "user_agent", "is_spam"]
 
 
-class PublicAnnouncementCommentCreateSerializer(serializers.ModelSerializer):
+class PublicAnnouncementCommentCreateSerializer(CalendarModelSerializer):
     website = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
@@ -121,7 +122,7 @@ class PublicAnnouncementCommentCreateSerializer(serializers.ModelSerializer):
         return validate_public_submission(attrs, message_field="body")
 
 
-class PublicEventSerializer(serializers.ModelSerializer):
+class PublicEventSerializer(CalendarModelSerializer):
     class Meta:
         model = PublicEvent
         fields = "__all__"
@@ -135,14 +136,14 @@ class PublicEventSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class PublicAchievementSerializer(serializers.ModelSerializer):
+class PublicAchievementSerializer(CalendarModelSerializer):
     class Meta:
         model = PublicAchievement
         fields = "__all__"
         read_only_fields = ["tenant", "created_by", "created_at", "updated_at"]
 
 
-class PublicInquirySerializer(serializers.ModelSerializer):
+class PublicInquirySerializer(CalendarModelSerializer):
     class Meta:
         model = PublicInquiry
         fields = "__all__"
@@ -158,7 +159,7 @@ class PublicInquirySerializer(serializers.ModelSerializer):
         return attrs
 
 
-class PublicInquiryCreateSerializer(serializers.ModelSerializer):
+class PublicInquiryCreateSerializer(CalendarModelSerializer):
     website = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:

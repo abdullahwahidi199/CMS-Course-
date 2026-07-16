@@ -16,6 +16,8 @@ import DataTable from "../../shared/DataTable";
 import PageHeader from "../../shared/PageHeader";
 import StatCard from "../../shared/StatCard";
 import { useApiResource } from "../../../hooks/useApiResource";
+import { useCalendar } from "../../../hooks/useCalendar";
+import { CalendarDateRangePicker } from "../../shared/CalendarDatePicker";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend);
 
@@ -66,6 +68,7 @@ function chartData(series, label) {
 }
 
 export default function ReportDashboard({ config }) {
+  const calendar = useCalendar(config.calendarModule || config.slug || "reports");
   const [filters, setFilters] = useState(config.initialFilters || {});
   const [applied, setApplied] = useState(config.initialFilters || {});
   const params = useMemo(() => ({
@@ -108,7 +111,7 @@ export default function ReportDashboard({ config }) {
 
       <div className="text-sm text-gray-500">
         Reports / {config.title}
-        {report.data?.last_generated ? <span className="ml-3">Last generated: {new Date(report.data.last_generated).toLocaleString()}</span> : null}
+        {report.data?.last_generated ? <span className="ml-3">Last generated: {calendar.formatDateTime(report.data.last_generated)}</span> : null}
       </div>
 
       <section className="rounded-md bg-white p-4 shadow-sm print:hidden">
@@ -117,14 +120,17 @@ export default function ReportDashboard({ config }) {
         </div>
         <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
           {config.dateFilter !== false ? (
-            <>
-              <Field label={config.startLabel || "Start date"}>
-                <Input type="date" value={filters.start_date || ""} onChange={(event) => setFilter("start_date", event.target.value)} />
-              </Field>
-              <Field label={config.endLabel || "End date"}>
-                <Input type="date" value={filters.end_date || ""} onChange={(event) => setFilter("end_date", event.target.value)} />
-              </Field>
-            </>
+            <div className="md:col-span-2">
+              <CalendarDateRangePicker
+                module={config.calendarModule || config.slug || "reports"}
+                startLabel={config.startLabel || "Start date"}
+                endLabel={config.endLabel || "End date"}
+                startValue={filters.start_date || ""}
+                endValue={filters.end_date || ""}
+                onStartChange={(value) => setFilter("start_date", value)}
+                onEndChange={(value) => setFilter("end_date", value)}
+              />
+            </div>
           ) : null}
           {config.filters.map((filter) => (
             <Field key={filter.key} label={filter.label}>
@@ -162,7 +168,7 @@ export default function ReportDashboard({ config }) {
         )}
       </section>
 
-      <DataTable title={config.tableTitle || config.title} columns={config.columns} rows={rows} loading={report.loading} error={report.error} empty="No report data found." pageSize={Number(report.data?.page_size || 25)} />
+      <DataTable title={config.tableTitle || config.title} columns={config.columns} rows={rows} loading={report.loading} error={report.error} empty="No report data found." pageSize={Number(report.data?.page_size || 25)} calendarModule={config.calendarModule || config.slug || "reports"} />
     </div>
   );
 }

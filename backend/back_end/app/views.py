@@ -14,6 +14,7 @@ from rest_framework.views import APIView
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from datetime import date
 from decimal import Decimal
+from decimal import InvalidOperation
 import json
 from django.core.exceptions import ValidationError
 from rest_framework import status
@@ -26,12 +27,13 @@ from .serializers import ExpenseHistorySerializer,UserSerializer
 from rest_framework.decorators import api_view, permission_classes,action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser,AllowAny
 from .models import Marks,Assignment,Submission
-from .serializers import MarksSerializer,AssignmentSerializer,SubmissionSerializer,TenantSerializer
+from .serializers import MarksSerializer,AssignmentSerializer,SubmissionSerializer,TenantSerializer,SuperAdminTenantSerializer
 from rest_framework import viewsets, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from datetime import timedelta
 from django.utils.timezone import now
 from .models import Tenant,User
@@ -40,6 +42,7 @@ from .services.enrollment_service import create_enrollment, transition_enrollmen
 from .services.promotion_service import promote_student
 from .enterprise_permissions import HasRBACPermission
 from .rbac import can
+from .shamsi import convert_query_date, format_calendar_date, get_module_calendar, normalize_calendar_settings
 
 
 def require_permission(user, code):
@@ -80,7 +83,9 @@ def update_tenant(request):
         )
     tenant = get_tenant(request)
 
-    data = request.data.copy()
+    data = {key: request.data.get(key) for key in request.data.keys()}
+    if isinstance(data.get("notification_settings"), list):
+        data["notification_settings"] = data["notification_settings"][0] if data["notification_settings"] else "{}"
     if isinstance(data.get("notification_settings"), str):
         try:
             data["notification_settings"] = json.loads(data["notification_settings"])
@@ -89,6 +94,23 @@ def update_tenant(request):
                 {"notification_settings": "Invalid notification settings JSON."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+    if not isinstance(data.get("notification_settings"), dict):
+        data["notification_settings"] = {}
+    if isinstance(data.get("calendar_settings"), list):
+        data["calendar_settings"] = data["calendar_settings"][0] if data["calendar_settings"] else "{}"
+    if isinstance(data.get("calendar_settings"), str):
+        try:
+            data["calendar_settings"] = json.loads(data["calendar_settings"])
+        except json.JSONDecodeError:
+            return Response(
+                {"calendar_settings": "Invalid calendar settings JSON."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+    if "calendar_settings" in data:
+        notification_settings = dict(tenant.notification_settings or {})
+        notification_settings["calendar_settings"] = normalize_calendar_settings(data.get("calendar_settings"))
+        data.pop("calendar_settings", None)
+        data["notification_settings"] = notification_settings
 
     serializer = TenantSerializer(
         tenant,
@@ -116,12 +138,27 @@ def create_tenant(request):
             status=403
         )
 
+    expiry_date = request.data.get("expiry_date") or None
+    if expiry_date:
+        expiry_date = parse_date(str(expiry_date))
+        if not expiry_date:
+            return Response({"expiry_date": "Use Gregorian YYYY-MM-DD format."}, status=status.HTTP_400_BAD_REQUEST)
+
+    subscription_price = request.data.get("subscription_price", 0) or 0
+    try:
+        subscription_price = Decimal(str(subscription_price))
+    except (InvalidOperation, TypeError, ValueError):
+        return Response({"subscription_price": "Enter a valid subscription price."}, status=status.HTTP_400_BAD_REQUEST)
+    if subscription_price < 0:
+        return Response({"subscription_price": "Subscription price cannot be negative."}, status=status.HTTP_400_BAD_REQUEST)
+
     tenant = Tenant.objects.create(
         name=request.data["name"],
         email=request.data.get("email", ""),
         phone=request.data.get("phone", ""),
         address=request.data.get("address", ""),
-        subscription_expiry=request.data.get("expiry_date", None)
+        subscription_expiry=expiry_date,
+        subscription_price=subscription_price,
     )
 
     admin_role, _ = Role.objects.get_or_create(tenant=tenant, slug="admin", defaults={"name": "Admin", "is_system": True})
@@ -136,6 +173,72 @@ def create_tenant(request):
         "tenant_id": tenant.id,
         "admin_id": admin.id
     })
+
+
+def super_admin_required(request):
+    if not request.user.is_super_admin:
+        return Response({"detail": "Only Super Admin users can manage tenant subscriptions."}, status=status.HTTP_403_FORBIDDEN)
+    return None
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def tenant_admin_list(request):
+    denied = super_admin_required(request)
+    if denied:
+        return denied
+    tenants = Tenant.objects.all().order_by("name")
+    return Response(SuperAdminTenantSerializer(tenants, many=True).data)
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
+def tenant_admin_detail(request, tenant_id):
+    denied = super_admin_required(request)
+    if denied:
+        return denied
+    tenant = get_object_or_404(Tenant, id=tenant_id)
+
+    if request.method == "GET":
+        return Response(SuperAdminTenantSerializer(tenant).data)
+
+    data = {}
+    if "subscription_expiry" in request.data:
+        expiry = request.data.get("subscription_expiry")
+        if expiry in ("", None):
+            data["subscription_expiry"] = None
+        else:
+            parsed_expiry = parse_date(str(expiry))
+            if not parsed_expiry:
+                return Response({"subscription_expiry": "Use YYYY-MM-DD format."}, status=status.HTTP_400_BAD_REQUEST)
+            data["subscription_expiry"] = parsed_expiry
+
+    requested_status = request.data.get("status")
+    if requested_status == "expired":
+        expiry = data.get("subscription_expiry", tenant.subscription_expiry)
+        if not expiry or expiry >= timezone.localdate():
+            data["subscription_expiry"] = timezone.localdate() - timedelta(days=1)
+    elif requested_status == "active":
+        expiry = data.get("subscription_expiry", tenant.subscription_expiry)
+        if not expiry or expiry < timezone.localdate():
+            data["subscription_expiry"] = timezone.localdate()
+
+    if "subscription_notes" in request.data:
+        data["subscription_notes"] = request.data.get("subscription_notes", "")
+
+    if "subscription_price" in request.data:
+        try:
+            subscription_price = Decimal(str(request.data.get("subscription_price") or 0))
+        except (InvalidOperation, TypeError, ValueError):
+            return Response({"subscription_price": "Enter a valid subscription price."}, status=status.HTTP_400_BAD_REQUEST)
+        if subscription_price < 0:
+            return Response({"subscription_price": "Subscription price cannot be negative."}, status=status.HTTP_400_BAD_REQUEST)
+        data["subscription_price"] = subscription_price
+
+    serializer = SuperAdminTenantSerializer(tenant, data=data, partial=True)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+    return Response(serializer.data)
 
 
 
@@ -309,9 +412,9 @@ class PromotionView(APIView):
         if new_class_id:
             queryset = queryset.filter(new_class_id=new_class_id)
         if start_date:
-            queryset = queryset.filter(promotion_date__gte=start_date)
+            queryset = queryset.filter(promotion_date__gte=convert_query_date(start_date, request.user.tenant, "students"))
         if end_date:
-            queryset = queryset.filter(promotion_date__lte=end_date)
+            queryset = queryset.filter(promotion_date__lte=convert_query_date(end_date, request.user.tenant, "students"))
         return queryset
 
     def get(self, request):
@@ -377,9 +480,9 @@ def studentsApi(request):
         if course:
             students = students.filter(active_enrollment, enrollments__course_id=course)
         if enrollment_start:
-            students = students.filter(active_enrollment, enrollments__enrollment_date__gte=enrollment_start)
+            students = students.filter(active_enrollment, enrollments__enrollment_date__gte=convert_query_date(enrollment_start, request.user.tenant, "students"))
         if enrollment_end:
-            students = students.filter(active_enrollment, enrollments__enrollment_date__lte=enrollment_end)
+            students = students.filter(active_enrollment, enrollments__enrollment_date__lte=convert_query_date(enrollment_end, request.user.tenant, "students"))
         if student_status == "active":
             students = students.filter(is_active=True)
         elif student_status == "inactive":
@@ -718,9 +821,9 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
         if teacher:
             queryset = queryset.filter(teacher_id=teacher)
         if start_date:
-            queryset = queryset.filter(date__gte=start_date)
+            queryset = queryset.filter(date__gte=convert_query_date(start_date, self.request.user.tenant, "attendance"))
         if end_date:
-            queryset = queryset.filter(date__lte=end_date)
+            queryset = queryset.filter(date__lte=convert_query_date(end_date, self.request.user.tenant, "attendance"))
         return queryset
 
     def perform_create(self, serializer):
@@ -738,10 +841,11 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
         teacher = request.user.teacher_profile if is_teacher_user(request.user) else None
         if request.data.get("teacher") and not teacher:
             teacher = get_object_or_404(Teachers, id=request.data.get("teacher"), tenant=request.user.tenant)
+        session_date = convert_query_date(request.data.get("date"), request.user.tenant, "attendance") or timezone.localdate()
         session, _ = AttendanceSession.objects.update_or_create(
             tenant=request.user.tenant,
             batch=batch,
-            date=request.data.get("date") or timezone.localdate(),
+            date=session_date,
             defaults={
                 "course": batch.course,
                 "teacher": teacher,
@@ -860,9 +964,9 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         start_date = self.request.query_params.get("start_date")
         end_date = self.request.query_params.get("end_date")
         if start_date:
-            queryset = queryset.filter(date__gte=start_date)
+            queryset = queryset.filter(date__gte=convert_query_date(start_date, self.request.user.tenant, "attendance"))
         if end_date:
-            queryset = queryset.filter(date__lte=end_date)
+            queryset = queryset.filter(date__lte=convert_query_date(end_date, self.request.user.tenant, "attendance"))
         return queryset
 
     @action(detail=False, methods=["get"])
@@ -1021,9 +1125,9 @@ def expensesApi(request):
         if category:
             expenses = expenses.filter(category_id=category)
         if start_date:
-            expenses = expenses.filter(expense_date__gte=start_date)
+            expenses = expenses.filter(expense_date__gte=convert_query_date(start_date, request.user.tenant, "fees"))
         if end_date:
-            expenses = expenses.filter(expense_date__lte=end_date)
+            expenses = expenses.filter(expense_date__lte=convert_query_date(end_date, request.user.tenant, "fees"))
         if min_amount:
             expenses = expenses.filter(amount__gte=min_amount)
         if max_amount:
@@ -1934,7 +2038,7 @@ def student_invoice_download(request, invoice_id):
             f"Course: {invoice.course.name if invoice.course_id else ''}",
             f"Batch: {invoice.batch.name if invoice.batch_id else ''}",
             f"Period: {invoice.billing_month or invoice.month}/{invoice.billing_year or invoice.year}",
-            f"Due date: {invoice.due_date}",
+            f"Due date: {format_calendar_date(invoice.due_date, get_module_calendar(request.user.tenant, 'invoices'))}",
             f"Total: {invoice.final_amount}",
             f"Paid: {invoice.paid_amount}",
             f"Balance: {invoice.balance}",
@@ -1956,7 +2060,7 @@ def student_payment_receipt(request, payment_id):
             f"Student: {payment.student.name if payment.student_id else ''}",
             f"Course: {payment.enrollment.course.name if payment.enrollment_id else ''}",
             f"Batch: {payment.enrollment.batch.name if payment.enrollment_id else ''}",
-            f"Date: {payment.payment_date}",
+            f"Date: {format_calendar_date(payment.payment_date, get_module_calendar(request.user.tenant, 'fees'))}",
             f"Method: {payment.payment_method}",
             f"Amount: {payment.amount_paid}",
             f"Reference: {payment.reference_number}",
@@ -1974,7 +2078,7 @@ def student_ledger_download(request):
         "Date | Type | Reference | Debit | Credit | Balance | Description",
     ]
     lines.extend(
-        f"{row.transaction_date} | {row.transaction_type} | {row.reference_number} | {row.debit} | {row.credit} | {row.balance} | {row.description}"
+        f"{format_calendar_date(row.transaction_date, get_module_calendar(request.user.tenant, 'fees'))} | {row.transaction_type} | {row.reference_number} | {row.debit} | {row.credit} | {row.balance} | {row.description}"
         for row in rows
     )
     return simple_pdf_response("student-ledger", lines)
@@ -1992,7 +2096,7 @@ def student_certificate_download(request, enrollment_id):
             f"Student: {enrollment.student.name}",
             f"Course: {enrollment.course.name}",
             f"Batch: {enrollment.batch.name}",
-            f"Completed date: {enrollment.completed_date}",
+            f"Completed date: {format_calendar_date(enrollment.completed_date, get_module_calendar(request.user.tenant, 'certificates'))}",
             "Certificate status: Issued",
         ],
     )

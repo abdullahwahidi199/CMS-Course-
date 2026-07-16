@@ -4,6 +4,8 @@ import { AuthContext } from "../AuthProvider";
 import { firstAccessiblePath, firstAccessibleTeacherPath } from "../routes/appRoutes";
 import EnterpriseDashboard from "./enterprise/EnterpriseDashboard";
 
+const SUPER_ADMIN_DASHBOARD = "/super-admin/dashboard";
+
 export default function PermissionRedirect() {
   const { user, permissions, initializing } = useContext(AuthContext);
 
@@ -11,6 +13,7 @@ export default function PermissionRedirect() {
   if (!user) return <Navigate to="/" replace />;
 
   const roleSlug = user.role_slug || user.role_details?.slug;
+  if (roleSlug === "super-admin" || roleSlug === "super_admin") return <Navigate to={SUPER_ADMIN_DASHBOARD} replace />;
   if (roleSlug === "teacher") return <Navigate to={firstAccessibleTeacherPath(permissions)} replace />;
   if (roleSlug === "student") return <Navigate to="/student/dashboard" replace />;
 

@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { AuthContext } from "../AuthProvider";
 import instance from "../api/axiosInstance";
 import { firstAccessibleTeacherPath } from "../routes/appRoutes";
+import { parseDate } from "../utils/calendar";
 
 export default function ProtectedRoute({ children, roles, permission }) {
   const { user, initializing, can } = useContext(AuthContext);
@@ -20,9 +21,12 @@ export default function ProtectedRoute({ children, roles, permission }) {
         const response = await instance.get("/get-tenant/");
         const expiryDate = response.data.subscription_expiry;
         if (expiryDate) {
+          const calendarType = response.data.calendar_type || response.data.calendar_settings?.default_calendar || "gregorian";
+          const gregorianExpiry = parseDate(expiryDate, calendarType);
           const today = new Date();
           today.setHours(0, 0, 0, 0);
-          if (new Date(expiryDate) < today) setExpired(true);
+          if (gregorianExpiry && new Date(gregorianExpiry) < today) setExpired(true);
+          else setExpired(false);
         }
       } finally {
         setLoading(false);

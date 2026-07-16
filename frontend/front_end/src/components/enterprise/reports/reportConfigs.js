@@ -109,6 +109,7 @@ export const reportConfigs = {
   },
   fees: {
     slug: "fees",
+    calendarModule: "fees",
     title: "Fees Report",
     endpoint: "/v1/reports/fees/",
     description: "Review fee invoices, collections, balances, payment status, plans, and courses.",
@@ -144,6 +145,7 @@ export const reportConfigs = {
   },
   revenue: {
     slug: "revenue",
+    calendarModule: "fees",
     title: "Revenue Report",
     endpoint: "/v1/reports/revenue/",
     description: "Monitor revenue sources, payment methods, and monthly or yearly collections.",
@@ -262,6 +264,7 @@ export const reportConfigs = {
   },
   stationerySales: {
     slug: "stationery-sales",
+    calendarModule: "inventory",
     title: "Stationery Sales Report",
     endpoint: "/v1/reports/stationery-sales/",
     description: "Analyze stationery sale receipts by product, cashier, date range, and payment status.",

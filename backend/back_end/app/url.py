@@ -4,7 +4,7 @@ from .views import student_lifecycle, teacher_lifecycle, batch_lifecycle
 from .views import SchoolTotalEarnings,expensesApi,expenseDetailsView,expense_dashboard,expense_lifecycle,FinancialSummaryView,ExpenseHistoryApiView,TimetableListView,roomApi,MarksViewSet,CourseViewSet,EnrollmentViewSet
 from .views import AttendanceSessionViewSet, AttendanceRecordViewSet, ExpenseCategoryViewSet, BudgetViewSet, RecurringExpenseViewSet
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from .views import AdmissionView, PromotionView, UserProfileView,student_profile,teacher_profile,AssignmetViewSet,SubmissionViewSet,roomDetailsView,DashboardView,create_tenant
+from .views import AdmissionView, PromotionView, UserProfileView,student_profile,teacher_profile,AssignmetViewSet,SubmissionViewSet,roomDetailsView,DashboardView,create_tenant,tenant_admin_detail,tenant_admin_list
 from rest_framework.routers import DefaultRouter
 from .views import get_current_tenant,update_tenant
 from .views import student_dashboard, student_assessments, student_enrollments, student_attendance, student_fees, student_assignments, student_marks, student_announcements, student_notifications, student_invoice_download, student_payment_receipt, student_ledger_download, student_certificate_download
@@ -36,6 +36,8 @@ urlpatterns=[
     path('get-tenant/',get_current_tenant),
     path('update-tenant/',update_tenant),
     path('create-tenant/',create_tenant,name='create-tenant'),
+    path('super-admin/tenants/', tenant_admin_list, name='tenant-admin-list'),
+    path('super-admin/tenants/<int:tenant_id>/', tenant_admin_detail, name='tenant-admin-detail'),
     path('students/',studentsApi),
     path('students/<int:id>/',studentDetailsView.as_view()),
     path('students/<int:id>/<str:action_name>/', student_lifecycle),

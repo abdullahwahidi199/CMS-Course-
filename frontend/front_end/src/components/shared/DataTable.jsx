@@ -1,8 +1,21 @@
 import { Download, Search } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useCalendar } from "../../hooks/useCalendar";
 
 function valueFor(row, column) {
   return column.accessor ? column.accessor(row) : row[column.key];
+}
+
+function isDateColumn(column) {
+  return column.type === "date" || /(^date$|_date$|Date$|created_at|updated_at|published_at|submitted_at|read_at|last_login|achieved_on|starts_at|ends_at)/.test(column.key || "");
+}
+
+function displayValue(row, column, calendar) {
+  const value = valueFor(row, column);
+  if (column.render) return column.render(row);
+  if (!isDateColumn(column)) return value;
+  if (row.calendar_type) return value || "";
+  return calendar.formatDateTime(value);
 }
 
 function exportCsv(columns, rows, filename) {
@@ -21,17 +34,15 @@ function exportCsv(columns, rows, filename) {
   URL.revokeObjectURL(url);
 }
 
-function MobileRowCard({ row, columns, actions, bulkActions, selected, setSelected }) {
+function MobileRowCard({ row, columns, actions, bulkActions, selected, setSelected, calendar }) {
   return (
-    <article className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+    <article className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-gray-900">
-            {valueFor(row, columns[0]) || "Record"}
+          <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+            {displayValue(row, columns[0], calendar) || "Record"}
           </p>
-          {columns[1] ? (
-            <p className="truncate text-xs text-gray-500">{valueFor(row, columns[1])}</p>
-          ) : null}
+          {columns[1] ? <p className="truncate text-xs text-slate-500 dark:text-slate-400">{displayValue(row, columns[1], calendar)}</p> : null}
         </div>
         {bulkActions ? (
           <input
@@ -45,22 +56,38 @@ function MobileRowCard({ row, columns, actions, bulkActions, selected, setSelect
       </div>
       <dl className="grid grid-cols-1 gap-2">
         {columns.slice(2).map((column) => (
-          <div key={column.key} className="flex items-start justify-between gap-3 border-t border-gray-100 pt-2 text-sm">
-            <dt className="shrink-0 text-xs font-medium uppercase text-gray-400">{column.label}</dt>
-            <dd className="min-w-0 text-right text-gray-700">{column.render ? column.render(row) : valueFor(row, column)}</dd>
+          <div key={column.key} className="flex items-start justify-between gap-3 border-t border-slate-100 pt-2 text-sm dark:border-slate-800">
+            <dt className="shrink-0 text-xs font-medium uppercase text-slate-400">{column.label}</dt>
+            <dd className="min-w-0 text-right text-slate-700 dark:text-slate-200">{displayValue(row, column, calendar)}</dd>
           </div>
         ))}
       </dl>
       {actions ? (
-        <div className="mt-3 flex flex-wrap gap-2 border-t border-gray-100 pt-3">
+        <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
           {actions(row).map((action) => (
-            <button key={action.label} className="rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-700" onClick={action.onClick}>
+            <button key={action.label} className="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800" onClick={action.onClick}>
               {action.label}
             </button>
           ))}
         </div>
       ) : null}
     </article>
+  );
+}
+
+function TableSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-slate-800">
+        <div className="h-5 w-32 animate-pulse rounded bg-slate-200 dark:bg-slate-800" />
+        <div className="h-10 w-52 animate-pulse rounded bg-slate-200 dark:bg-slate-800" />
+      </div>
+      <div className="space-y-3 p-4">
+        {[0, 1, 2, 3].map((item) => (
+          <div key={item} className="h-12 animate-pulse rounded bg-slate-200 dark:bg-slate-800" />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -74,7 +101,9 @@ export default function DataTable({
   actions,
   bulkActions,
   pageSize = 10,
+  calendarModule = "dashboard",
 }) {
+  const calendar = useCalendar(calendarModule);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState({ key: columns[0]?.key, direction: "asc" });
   const [page, setPage] = useState(1);
@@ -83,13 +112,12 @@ export default function DataTable({
   const filteredRows = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     const visible = normalized
-      ? rows.filter((row) =>
-          columns.some((column) => String(valueFor(row, column) ?? "").toLowerCase().includes(normalized)),
-        )
+      ? rows.filter((row) => columns.some((column) => String(valueFor(row, column) ?? "").toLowerCase().includes(normalized)))
       : rows;
     return [...visible].sort((a, b) => {
-      const aValue = valueFor(a, columns.find((column) => column.key === sort.key) || columns[0]);
-      const bValue = valueFor(b, columns.find((column) => column.key === sort.key) || columns[0]);
+      const sortColumn = columns.find((column) => column.key === sort.key) || columns[0];
+      const aValue = valueFor(a, sortColumn);
+      const bValue = valueFor(b, sortColumn);
       return String(aValue ?? "").localeCompare(String(bValue ?? ""), undefined, { numeric: true }) * (sort.direction === "asc" ? 1 : -1);
     });
   }, [columns, query, rows, sort]);
@@ -105,26 +133,24 @@ export default function DataTable({
     }));
   };
 
-  if (loading) {
-    return <div className="rounded-md bg-white p-6 text-sm text-gray-500 shadow-sm">Loading...</div>;
-  }
+  if (loading) return <TableSkeleton />;
 
   if (error) {
-    return <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>;
+    return <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">{error}</div>;
   }
 
   return (
-    <div className="overflow-hidden rounded-md bg-white shadow-sm">
-      <div className="flex flex-col gap-3 border-b border-gray-100 p-4 md:flex-row md:items-center md:justify-between">
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex flex-col gap-3 border-b border-slate-100 p-4 md:flex-row md:items-center md:justify-between dark:border-slate-800">
         <div>
-          <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-          <p className="text-xs text-gray-500">{filteredRows.length} records</p>
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{title}</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{filteredRows.length} records</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex min-w-52 items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm">
-            <Search size={16} className="text-gray-400" />
+          <label className="flex min-w-52 items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-700">
+            <Search size={16} className="text-slate-400" />
             <input
-              className="w-full outline-none"
+              className="w-full bg-transparent text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100"
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
@@ -136,7 +162,7 @@ export default function DataTable({
           {bulkActions?.map((action) => (
             <button
               key={action.label}
-              className="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 disabled:opacity-40"
+              className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200"
               disabled={!selectedRows.length}
               onClick={() => action.onClick(selectedRows)}
             >
@@ -144,16 +170,17 @@ export default function DataTable({
             </button>
           ))}
           <button
-            className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700"
+            className="inline-flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
             onClick={() => exportCsv(columns, filteredRows, `${title.toLowerCase().replaceAll(" ", "-")}.csv`)}
           >
             <Download size={16} /> Export
           </button>
         </div>
       </div>
+
       <div className="grid gap-3 p-3 md:hidden">
         {pagedRows.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500">{empty}</div>
+          <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">{empty}</div>
         ) : (
           pagedRows.map((row) => (
             <MobileRowCard
@@ -164,13 +191,15 @@ export default function DataTable({
               bulkActions={bulkActions}
               selected={selected}
               setSelected={setSelected}
+              calendar={calendar}
             />
           ))
         )}
       </div>
+
       <div className="hidden overflow-x-auto md:block">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50">
+        <table className="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
+          <thead className="bg-slate-50 dark:bg-slate-950">
             <tr>
               {bulkActions ? (
                 <th className="w-10 px-4 py-3">
@@ -186,20 +215,20 @@ export default function DataTable({
               {columns.map((column) => (
                 <th
                   key={column.key}
-                  className="cursor-pointer px-4 py-3 text-left font-semibold text-gray-600"
+                  className="cursor-pointer px-4 py-3 text-left font-semibold text-slate-600 dark:text-slate-300"
                   onClick={() => toggleSort(column.key)}
                 >
                   {column.label}
-                  {sort.key === column.key ? <span className="ml-1 text-gray-400">{sort.direction === "asc" ? "↑" : "↓"}</span> : null}
+                  {sort.key === column.key ? <span className="ml-1 text-xs text-slate-400">{sort.direction === "asc" ? "Asc" : "Desc"}</span> : null}
                 </th>
               ))}
-              {actions ? <th className="px-4 py-3 text-right font-semibold text-gray-600">Actions</th> : null}
+              {actions ? <th className="px-4 py-3 text-right font-semibold text-slate-600 dark:text-slate-300">Actions</th> : null}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {pagedRows.length === 0 ? (
               <tr>
-                <td className="px-4 py-6 text-center text-gray-500" colSpan={columns.length + (actions ? 1 : 0) + (bulkActions ? 1 : 0)}>
+                <td className="px-4 py-6 text-center text-slate-500 dark:text-slate-400" colSpan={columns.length + (actions ? 1 : 0) + (bulkActions ? 1 : 0)}>
                   {empty}
                 </td>
               </tr>
@@ -216,15 +245,15 @@ export default function DataTable({
                     </td>
                   ) : null}
                   {columns.map((column) => (
-                    <td key={column.key} className="whitespace-nowrap px-4 py-3 text-gray-700">
-                      {column.render ? column.render(row) : valueFor(row, column)}
+                    <td key={column.key} className="whitespace-nowrap px-4 py-3 text-slate-700 dark:text-slate-200">
+                      {displayValue(row, column, calendar)}
                     </td>
                   ))}
                   {actions ? (
                     <td className="whitespace-nowrap px-4 py-3 text-right">
                       <div className="inline-flex gap-2">
                         {actions(row).map((action) => (
-                          <button key={action.label} className="rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-700" onClick={action.onClick}>
+                          <button key={action.label} className="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800" onClick={action.onClick}>
                             {action.label}
                           </button>
                         ))}
@@ -237,11 +266,12 @@ export default function DataTable({
           </tbody>
         </table>
       </div>
-      <div className="flex items-center justify-between border-t border-gray-100 p-3 text-sm text-gray-600">
+
+      <div className="flex items-center justify-between border-t border-slate-100 p-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300">
         <span>Page {page} of {pages}</span>
         <div className="flex gap-2">
-          <button className="rounded-md border border-gray-200 px-3 py-1 disabled:opacity-40" disabled={page === 1} onClick={() => setPage((value) => value - 1)}>Previous</button>
-          <button className="rounded-md border border-gray-200 px-3 py-1 disabled:opacity-40" disabled={page === pages} onClick={() => setPage((value) => value + 1)}>Next</button>
+          <button className="rounded-md border border-slate-200 px-3 py-1 disabled:opacity-40 dark:border-slate-700" disabled={page === 1} onClick={() => setPage((value) => value - 1)}>Previous</button>
+          <button className="rounded-md border border-slate-200 px-3 py-1 disabled:opacity-40 dark:border-slate-700" disabled={page === pages} onClick={() => setPage((value) => value + 1)}>Next</button>
         </div>
       </div>
     </div>
