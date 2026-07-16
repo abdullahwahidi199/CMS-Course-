@@ -130,6 +130,9 @@ class Role(models.Model):
     class Meta:
         unique_together = ("tenant", "slug")
         ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(fields=["tenant", "slug"], name="app_role_tenant_slug_unique_nulls_not_distinct", nulls_distinct=False),
+        ]
         indexes = [
             models.Index(fields=["tenant", "slug"]),
             models.Index(fields=["is_active"]),

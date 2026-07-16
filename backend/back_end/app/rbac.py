@@ -145,6 +145,33 @@ def migrate_legacy_classes_permissions(permissions, tenant=None):
             role.permissions.add(*additions)
 
 
+def get_or_create_system_role(tenant, role_name, user=None):
+    slug = slugify(role_name)
+    role = Role.objects.filter(tenant=tenant, slug=slug).order_by("id").first()
+    if role:
+        updates = []
+        expected_name = role_name.replace("_", " ").title()
+        if not role.name:
+            role.name = expected_name
+            updates.append("name")
+        if not role.is_system:
+            role.is_system = True
+            updates.append("is_system")
+        if user and not role.created_by_id:
+            role.created_by = user
+            updates.append("created_by")
+        if updates:
+            role.save(update_fields=updates)
+        return role, False
+    return Role.objects.create(
+        tenant=tenant,
+        slug=slug,
+        name=role_name.replace("_", " ").title(),
+        is_system=True,
+        created_by=user,
+    ), True
+
+
 @transaction.atomic
 def seed_permissions_and_roles(tenant=None, user=None, migrate_legacy=True):
     permissions = {}
@@ -165,15 +192,7 @@ def seed_permissions_and_roles(tenant=None, user=None, migrate_legacy=True):
         migrate_legacy_classes_permissions(permissions, tenant)
 
     for role_name, codes in SYSTEM_ROLE_PERMISSIONS.items():
-        role, _ = Role.objects.get_or_create(
-            tenant=tenant,
-            slug=slugify(role_name),
-            defaults={
-                "name": role_name.replace("_", " ").title(),
-                "is_system": True,
-                "created_by": user,
-            },
-        )
+        role, _ = get_or_create_system_role(tenant, role_name, user)
         if codes == ["*"]:
             role.permissions.set(permissions.values())
         else:
