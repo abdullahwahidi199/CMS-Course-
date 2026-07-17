@@ -186,10 +186,10 @@ export default function TeacherAttendancePage() {
               <>
                 <div className="grid gap-3 md:hidden">
                   {records.map((record) => (
-                    <article key={record.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                    <article key={record.id} className="rounded-lg border border-slate-200 p-3">
                       <div className="mb-3 flex items-start justify-between gap-3">
                         <div>
-                          <p className="font-semibold text-slate-950 dark:text-white">{record.student_name}</p>
+                          <p className="font-semibold text-slate-950">{record.student_name}</p>
                           <p className="text-sm text-slate-500">{record.student_number}</p>
                         </div>
                         {statusBadge(record.status)}
@@ -205,7 +205,7 @@ export default function TeacherAttendancePage() {
                   ))}
                 </div>
                 <div className="hidden overflow-x-auto md:block">
-                  <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-800">
+                  <table className="min-w-full divide-y divide-slate-100 text-sm">
                     <thead>
                       <tr className="text-left text-xs font-semibold uppercase text-slate-500">
                         <th className="px-3 py-3">Student</th>
@@ -214,11 +214,11 @@ export default function TeacherAttendancePage() {
                         <th className="px-3 py-3">Remarks</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    <tbody className="divide-y divide-slate-100">
                       {records.map((record) => (
                         <tr key={record.id}>
-                          <td className="px-3 py-3 font-semibold text-slate-950 dark:text-white">{record.student_name}</td>
-                          <td className="px-3 py-3 text-slate-600 dark:text-slate-300">{record.student_number}</td>
+                          <td className="px-3 py-3 font-semibold text-slate-950">{record.student_name}</td>
+                          <td className="px-3 py-3 text-slate-600">{record.student_number}</td>
                           <td className="px-3 py-3">
                             <select className={inputClass()} value={record.status} onChange={(event) => updateRecord(record.id, { status: event.target.value })}>
                               {statusOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
@@ -245,15 +245,15 @@ export default function TeacherAttendancePage() {
             {history.length ? (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {history.slice(0, 12).map((item) => (
-                  <article key={item.id} className="rounded-md border border-slate-200 p-3 dark:border-slate-800">
+                  <article key={item.id} className="rounded-md border border-slate-200 p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-semibold text-slate-950 dark:text-white">{item.batch_name}</p>
+                        <p className="font-semibold text-slate-950">{item.batch_name}</p>
                         <p className="text-sm text-slate-500">{formatDate(item.date)}</p>
                       </div>
                       {statusBadge(item.status)}
                     </div>
-                    <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Present {item.present_count} / Absent {item.absent_count} / {item.attendance_percentage}%</p>
+                    <p className="mt-3 text-sm text-slate-600">Present {item.present_count} / Absent {item.absent_count} / {item.attendance_percentage}%</p>
                   </article>
                 ))}
               </div>

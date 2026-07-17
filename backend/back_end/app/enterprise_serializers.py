@@ -208,6 +208,13 @@ class EnrollmentBillingProfileSerializer(CalendarModelSerializer):
         return attrs
 
 
+class BlankAsZeroDecimalField(serializers.DecimalField):
+    def to_internal_value(self, data):
+        if data == "":
+            data = Decimal("0.00")
+        return super().to_internal_value(data)
+
+
 class PaymentSerializer(CalendarModelSerializer):
     calendar_module = "fees"
     invoice_number = serializers.CharField(source="invoice.invoice_number", read_only=True)
@@ -216,7 +223,7 @@ class PaymentSerializer(CalendarModelSerializer):
     batch_name = serializers.CharField(source="invoice.batch.name", read_only=True)
     invoice_discount = serializers.DecimalField(source="invoice.discount", max_digits=10, decimal_places=2, read_only=True)
     invoice_balance = serializers.DecimalField(source="invoice.balance", max_digits=10, decimal_places=2, read_only=True)
-    discount_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, write_only=True, default=Decimal("0.00"))
+    discount_amount = BlankAsZeroDecimalField(max_digits=10, decimal_places=2, required=False, write_only=True, default=Decimal("0.00"))
     discount_notes = serializers.CharField(required=False, allow_blank=True, write_only=True)
 
     class Meta:

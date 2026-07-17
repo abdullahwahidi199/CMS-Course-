@@ -18,9 +18,9 @@ import { formatDate, formatTime, normalizeList } from "./pages/teacherUtils.jsx"
 
 function ListItem({ title, meta, to }) {
   const body = (
-    <div className="rounded-md border border-slate-200 p-3 transition hover:border-cyan-200 hover:bg-cyan-50/50 dark:border-slate-800 dark:hover:bg-slate-800">
-      <p className="font-semibold text-slate-900 dark:text-white">{title}</p>
-      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{meta}</p>
+    <div className="rounded-md border border-slate-200 p-3 transition hover:border-cyan-200 hover:bg-cyan-50/50">
+      <p className="font-semibold text-slate-900">{title}</p>
+      <p className="mt-1 text-sm text-slate-500">{meta}</p>
     </div>
   );
   return to ? <Link to={to}>{body}</Link> : body;
@@ -69,14 +69,14 @@ export default function TeacherHomepage() {
         <LoadingSkeleton rows={5} />
       ) : (
         <>
-          <section className="rounded-lg bg-slate-950 p-5 text-white shadow-sm sm:p-6">
+          <section className="rounded-lg border border-slate-200 bg-white p-5 text-slate-950 shadow-sm sm:p-6">
             <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
               <div>
-                <p className="text-sm font-medium text-cyan-200">Welcome back</p>
+                <p className="text-sm font-medium text-cyan-700">Welcome back</p>
                 <h3 className="mt-1 text-2xl font-semibold sm:text-3xl">{teacher.full_name || "Teacher"}</h3>
-                <p className="mt-2 text-sm text-slate-300">{teacher.subject || "Subject"} / {teacher.department || "Department"}</p>
+                <p className="mt-2 text-sm text-slate-500">{teacher.subject || "Subject"} / {teacher.department || "Department"}</p>
               </div>
-              <div className="grid h-16 w-16 place-items-center rounded-lg bg-white/10 text-2xl font-bold">
+              <div className="grid h-16 w-16 place-items-center rounded-lg bg-cyan-50 text-2xl font-bold text-cyan-700">
                 {(teacher.full_name || "T").charAt(0).toUpperCase()}
               </div>
             </div>
@@ -95,8 +95,8 @@ export default function TeacherHomepage() {
               {quickActions.map((item) => {
                 const Icon = item.icon;
                 return (
-                  <Link key={item.label} to={item.to} className="flex items-center gap-3 rounded-md border border-slate-200 p-3 text-sm font-semibold text-slate-800 transition hover:border-cyan-200 hover:bg-cyan-50 dark:border-slate-800 dark:text-slate-100 dark:hover:bg-slate-800">
-                    <span className="rounded-md bg-cyan-50 p-2 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300"><Icon size={17} /></span>
+                  <Link key={item.label} to={item.to} className="flex items-center gap-3 rounded-md border border-slate-200 p-3 text-sm font-semibold text-slate-800 transition hover:border-cyan-200 hover:bg-cyan-50">
+                    <span className="rounded-md bg-cyan-50 p-2 text-cyan-700"><Icon size={17} /></span>
                     {item.label}
                   </Link>
                 );
@@ -146,13 +146,13 @@ export default function TeacherHomepage() {
             {(dashboardData.student_performance || []).length ? (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {dashboardData.student_performance.map((item, index) => (
-                  <div key={`${item.assessment__title}-${index}`} className="rounded-md border border-slate-200 p-4 dark:border-slate-800">
+                  <div key={`${item.assessment__title}-${index}`} className="rounded-md border border-slate-200 p-4">
                     <div className="flex items-center gap-2">
                       <ClipboardCheck size={17} className="text-cyan-700" />
-                      <p className="font-semibold text-slate-900 dark:text-white">{item.assessment__title}</p>
+                      <p className="font-semibold text-slate-900">{item.assessment__title}</p>
                     </div>
                     <p className="mt-2 text-2xl font-semibold text-cyan-700">{Number(item.avg_percentage || 0).toFixed(1)}%</p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">Class average</p>
+                    <p className="text-sm text-slate-500">Class average</p>
                   </div>
                 ))}
               </div>

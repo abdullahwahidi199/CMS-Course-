@@ -58,17 +58,17 @@ export default function TeacherClassesPage() {
           {visible.length ? (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {visible.map((item) => (
-                <article key={item.id} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
+                <article key={item.id} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-md">
                   <div className="mb-4 flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold uppercase text-cyan-700 dark:text-cyan-300">{item.course_name || item.subjects || "Course"}</p>
-                      <h3 className="mt-1 truncate text-lg font-semibold text-slate-950 dark:text-white">{item.name}</h3>
+                      <p className="text-xs font-semibold uppercase text-cyan-700">{item.course_name || item.subjects || "Course"}</p>
+                      <h3 className="mt-1 truncate text-lg font-semibold text-slate-950">{item.name}</h3>
                     </div>
-                    <span className="rounded-md bg-cyan-50 p-2 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300">
+                    <span className="rounded-md bg-cyan-50 p-2 text-cyan-700">
                       <BookOpen size={20} />
                     </span>
                   </div>
-                  <div className="space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                  <div className="space-y-2 text-sm text-slate-600">
                     <p className="flex items-center gap-2"><Users size={16} /> {item.student_count || 0} students</p>
                     <p className="flex items-center gap-2"><Clock size={16} /> {formatTime(item.start_time)} - {formatTime(item.end_time)}</p>
                     <p className="flex items-center gap-2"><MapPin size={16} /> {item.roomOfClass_details?.name || "No room assigned"}</p>
@@ -78,7 +78,7 @@ export default function TeacherClassesPage() {
                     <Link className="rounded-md bg-cyan-700 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-cyan-800" to={`/teacher/dashboard/classes/${item.id}`}>
                       Open
                     </Link>
-                    <Link className="rounded-md border border-slate-200 px-3 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800" to={`/teacher/dashboard/students?class=${item.id}`}>
+                    <Link className="rounded-md border border-slate-200 px-3 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50" to={`/teacher/dashboard/students?class=${item.id}`}>
                       Students
                     </Link>
                   </div>

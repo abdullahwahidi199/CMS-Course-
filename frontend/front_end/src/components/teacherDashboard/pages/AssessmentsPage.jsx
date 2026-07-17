@@ -218,10 +218,10 @@ export default function TeacherAssessmentsPage() {
               {visible.length ? (
                 <div className="space-y-3">
                   {visible.map((item) => (
-                    <article key={item.id} className="rounded-md border border-slate-200 p-3 dark:border-slate-800">
+                    <article key={item.id} className="rounded-md border border-slate-200 p-3">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                          <p className="font-semibold text-slate-950 dark:text-white">{item.title}</p>
+                          <p className="font-semibold text-slate-950">{item.title}</p>
                           <p className="text-sm text-slate-500">{item.batch_name || "-"} / {item.assessment_type} / {formatDate(item.assessment_date)}</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -243,7 +243,7 @@ export default function TeacherAssessmentsPage() {
             {selected ? (
               <>
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-800">
+                  <table className="min-w-full divide-y divide-slate-100 text-sm">
                     <thead>
                       <tr className="text-left text-xs font-semibold uppercase text-slate-500">
                         <th className="px-3 py-3">Student</th>
@@ -252,19 +252,19 @@ export default function TeacherAssessmentsPage() {
                         <th className="px-3 py-3">Current Result</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    <tbody className="divide-y divide-slate-100">
                       {enrollments.map((enrollment) => {
                         const existing = (selected.results || []).find((result) => result.enrollment === enrollment.id);
                         return (
                           <tr key={enrollment.id}>
-                            <td className="px-3 py-3 font-semibold text-slate-950 dark:text-white">{enrollment.student_name}</td>
+                            <td className="px-3 py-3 font-semibold text-slate-950">{enrollment.student_name}</td>
                             <td className="px-3 py-3">
                               <input type="number" min="0" max={selected.maximum_marks} className={inputClass()} value={marks[enrollment.id]?.marks_obtained ?? existing?.marks_obtained ?? ""} onChange={(event) => setMarks({ ...marks, [enrollment.id]: { ...marks[enrollment.id], marks_obtained: event.target.value } })} />
                             </td>
                             <td className="px-3 py-3">
                               <input className={inputClass()} value={marks[enrollment.id]?.remarks ?? existing?.remarks ?? ""} onChange={(event) => setMarks({ ...marks, [enrollment.id]: { ...marks[enrollment.id], remarks: event.target.value } })} />
                             </td>
-                            <td className="px-3 py-3 text-slate-600 dark:text-slate-300">{existing ? `${existing.percentage}% / ${existing.grade} / ${existing.is_passed ? "Pass" : "Fail"}` : "Not marked"}</td>
+                            <td className="px-3 py-3 text-slate-600">{existing ? `${existing.percentage}% / ${existing.grade} / ${existing.is_passed ? "Pass" : "Fail"}` : "Not marked"}</td>
                           </tr>
                         );
                       })}
@@ -283,9 +283,9 @@ export default function TeacherAssessmentsPage() {
               {rankings.length ? (
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {rankings.map((result, index) => (
-                    <div key={result.id} className="rounded-md border border-slate-200 p-3 dark:border-slate-800">
+                    <div key={result.id} className="rounded-md border border-slate-200 p-3">
                       <p className="text-xs font-semibold text-cyan-700">Rank {index + 1}</p>
-                      <p className="mt-1 font-semibold text-slate-950 dark:text-white">{result.student_name}</p>
+                      <p className="mt-1 font-semibold text-slate-950">{result.student_name}</p>
                       <p className="text-sm text-slate-500">{result.percentage}% / {result.grade} / {result.is_passed ? "Pass" : "Fail"}</p>
                     </div>
                   ))}

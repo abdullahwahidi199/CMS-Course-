@@ -166,10 +166,10 @@ export default function Assignment() {
                 const key = existing?.id || student.id;
                 const entry = local[key] || {};
                 return (
-                  <article key={student.id} className="rounded-md border border-slate-200 p-3 dark:border-slate-800">
+                  <article key={student.id} className="rounded-md border border-slate-200 p-3">
                     <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <p className="font-semibold text-slate-950 dark:text-white">{student.name}</p>
+                        <p className="font-semibold text-slate-950">{student.name}</p>
                         <p className="text-sm text-slate-500">{student.role_number || student.student_number_display || student.id}</p>
                       </div>
                       <div className="flex flex-wrap gap-2">

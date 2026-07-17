@@ -35,15 +35,15 @@ function classIsActiveOn(item, value) {
 
 function ScheduleCard({ item }) {
   return (
-    <article className="rounded-md border border-slate-200 p-3 dark:border-slate-800">
+    <article className="rounded-md border border-slate-200 p-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-semibold text-slate-950 dark:text-white">{item.course_name ? `${item.course_name} / ` : ""}{item.name}</p>
+          <p className="font-semibold text-slate-950">{item.course_name ? `${item.course_name} / ` : ""}{item.name}</p>
           <p className="mt-1 text-sm text-slate-500">{formatTime(item.start_time)} - {formatTime(item.end_time)}</p>
         </div>
         <Clock size={18} className="text-cyan-700" />
       </div>
-      <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{formatDate(item.startDate)} to {formatDate(item.endDate)}</p>
+      <p className="mt-3 text-sm text-slate-600">{formatDate(item.startDate)} to {formatDate(item.endDate)}</p>
     </article>
   );
 }
@@ -86,10 +86,10 @@ export default function TeacherTimetablePage() {
 
           <Panel title="Calendar Controls">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <input type="date" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm sm:w-56 dark:border-slate-700 dark:bg-slate-950" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
-              <div className="grid grid-cols-4 rounded-md border border-slate-200 p-1 text-sm dark:border-slate-700">
+              <input type="date" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm sm:w-56" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
+              <div className="grid grid-cols-4 rounded-md border border-slate-200 p-1 text-sm">
                 {["daily", "weekly", "agenda", "exams"].map((item) => (
-                  <button key={item} type="button" className={`rounded px-3 py-2 font-semibold capitalize ${view === item ? "bg-cyan-700 text-white" : "text-slate-600 dark:text-slate-300"}`} onClick={() => setView(item)}>
+                  <button key={item} type="button" className={`rounded px-3 py-2 font-semibold capitalize ${view === item ? "bg-cyan-700 text-white" : "text-slate-600"}`} onClick={() => setView(item)}>
                     {item}
                   </button>
                 ))}
@@ -124,8 +124,8 @@ export default function TeacherTimetablePage() {
               {examRows.length ? (
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {examRows.map((exam) => (
-                    <article key={exam.id} className="rounded-md border border-slate-200 p-3 dark:border-slate-800">
-                      <p className="font-semibold text-slate-950 dark:text-white">{exam.title}</p>
+                    <article key={exam.id} className="rounded-md border border-slate-200 p-3">
+                      <p className="font-semibold text-slate-950">{exam.title}</p>
                       <p className="mt-1 text-sm text-slate-500">{exam.batch_name || "-"} / {formatDate(exam.assessment_date)}</p>
                     </article>
                   ))}

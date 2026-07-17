@@ -122,10 +122,10 @@ export default function TeacherAssignmentsPage() {
                     const classInfo = classes.find((row) => row.id === item.class_assigned);
                     const closed = new Date(item.due_date) < new Date();
                     return (
-                      <article key={item.id} className="rounded-md border border-slate-200 p-3 dark:border-slate-800">
+                      <article key={item.id} className="rounded-md border border-slate-200 p-3">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div>
-                            <p className="font-semibold text-slate-950 dark:text-white">{item.title}</p>
+                            <p className="font-semibold text-slate-950">{item.title}</p>
                             <p className="text-sm text-slate-500">{classInfo?.name || `Class ${item.class_assigned}`} / Due {formatDate(item.due_date)} / {item.total_marks} marks</p>
                           </div>
                           <div className="flex flex-wrap gap-2">

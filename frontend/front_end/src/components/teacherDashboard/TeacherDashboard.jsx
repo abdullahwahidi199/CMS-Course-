@@ -14,8 +14,6 @@ import {
   Menu,
   Search,
   Settings,
-  Moon,
-  Sun,
   User,
   Users,
   X,
@@ -104,18 +102,17 @@ export default function TeacherDashboard() {
   const { hasPermission } = usePermissions();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("teacher-dark-mode") === "true");
   const name = user?.profile?.name || user?.first_name || user?.username || "Teacher";
   const items = useMemo(() => navItems.filter((item) => !item.permission || hasPermission(item.permission)), [hasPermission]);
   const title = pageTitles[location.pathname] || "Teacher Portal";
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", darkMode);
-    localStorage.setItem("teacher-dark-mode", String(darkMode));
-  }, [darkMode]);
+    document.documentElement.classList.remove("dark");
+    localStorage.removeItem("teacher-dark-mode");
+  }, []);
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-950 dark:bg-slate-950 dark:text-slate-100">
+    <div className="min-h-screen bg-slate-100 text-slate-950">
       <div className="fixed inset-y-0 left-0 z-30 hidden w-72 lg:block">
         <TeacherSidebar items={items} />
       </div>
@@ -139,7 +136,7 @@ export default function TeacherDashboard() {
       </div>
 
       <div className="lg:pl-72">
-        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
+        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
           <div className="flex h-16 items-center gap-3 px-4 sm:px-6">
             <button
               onClick={() => setDrawerOpen(true)}
@@ -149,8 +146,8 @@ export default function TeacherDashboard() {
               <Menu size={22} />
             </button>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Teacher Portal</p>
-              <h1 className="truncate text-base font-semibold text-slate-950 dark:text-white sm:text-lg">{title}</h1>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Teacher Portal</p>
+              <h1 className="truncate text-base font-semibold text-slate-950 sm:text-lg">{title}</h1>
             </div>
             <label className="hidden min-w-64 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 md:flex">
               <Search size={16} />
@@ -162,14 +159,6 @@ export default function TeacherDashboard() {
                 <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-cyan-600" />
               </NavLink>
             ) : null}
-            <button
-              type="button"
-              className="rounded-xl p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-              onClick={() => setDarkMode((value) => !value)}
-              aria-label="Toggle dark mode"
-            >
-              {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
             <div className="hidden h-9 w-9 place-items-center rounded-full bg-cyan-700 text-sm font-bold text-white sm:grid">
               {name.charAt(0).toUpperCase()}
             </div>

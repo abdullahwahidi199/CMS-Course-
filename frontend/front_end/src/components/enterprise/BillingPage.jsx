@@ -100,7 +100,7 @@ export default function BillingPage() {
   const [paymentForm, setPaymentForm] = useState({
     invoice: "",
     amount_paid: "",
-    discount_amount: "",
+    discount_amount: "0",
     discount_notes: "",
     payment_method: "cash",
     reference_number: "",
@@ -217,11 +217,15 @@ export default function BillingPage() {
     setSubmitting(true);
     setMessage("");
     try {
-      await apiCreate("/v1/payments/", paymentForm);
+      const payload = {
+        ...paymentForm,
+        discount_amount: paymentForm.discount_amount || "0",
+      };
+      await apiCreate("/v1/payments/", payload);
       setPaymentForm({
         invoice: "",
         amount_paid: "",
-        discount_amount: "",
+        discount_amount: "0",
         discount_notes: "",
         payment_method: "cash",
         reference_number: "",
@@ -254,9 +258,10 @@ export default function BillingPage() {
   }, []);
 
   useEffect(() => {
-    const period = invoiceCalendar.calendar === "shamsi"
-      ? { month: currentShamsi.month, year: currentShamsi.year }
-      : { month: current.getMonth() + 1, year: current.getFullYear() };
+    const period =
+      invoiceCalendar.calendar === "shamsi"
+        ? { month: currentShamsi.month, year: currentShamsi.year }
+        : { month: current.getMonth() + 1, year: current.getFullYear() };
     setGenerateForm((form) => ({ ...form, ...period }));
   }, [invoiceCalendar.calendar]);
 
@@ -511,7 +516,7 @@ export default function BillingPage() {
                   setPaymentForm({
                     ...paymentForm,
                     invoice: e.target.value,
-                    discount_amount: "",
+                    discount_amount: "0",
                     discount_notes: "",
                     amount_paid:
                       invoiceRows.find(
@@ -545,7 +550,10 @@ export default function BillingPage() {
                 onChange={(e) => {
                   const discount = Number(e.target.value || 0);
                   const adjustedBalance = selectedInvoice
-                    ? Math.max(Number(selectedInvoice.balance || 0) - discount, 0)
+                    ? Math.max(
+                        Number(selectedInvoice.balance || 0) - discount,
+                        0,
+                      )
                     : "";
                   setPaymentForm({
                     ...paymentForm,
@@ -648,7 +656,9 @@ export default function BillingPage() {
             className="grid gap-4 md:grid-cols-3"
             onSubmit={generateInvoices}
           >
-            <Field label={`Month (${invoiceCalendar.calendar === "shamsi" ? "Shamsi" : "Gregorian"})`}>
+            <Field
+              label={`Month (${invoiceCalendar.calendar === "shamsi" ? "Shamsi" : "Gregorian"})`}
+            >
               <Input
                 required
                 type="number"
@@ -660,7 +670,9 @@ export default function BillingPage() {
                 }
               />
             </Field>
-            <Field label={`Year (${invoiceCalendar.calendar === "shamsi" ? "Shamsi" : "Gregorian"})`}>
+            <Field
+              label={`Year (${invoiceCalendar.calendar === "shamsi" ? "Shamsi" : "Gregorian"})`}
+            >
               <Input
                 required
                 type="number"
@@ -675,7 +687,9 @@ export default function BillingPage() {
               <CalendarDatePicker
                 module="invoices"
                 value={generateForm.due_date}
-                onChange={(value) => setGenerateForm({ ...generateForm, due_date: value })}
+                onChange={(value) =>
+                  setGenerateForm({ ...generateForm, due_date: value })
+                }
               />
             </Field>
             <Field label="Scope">

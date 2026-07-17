@@ -72,9 +72,9 @@ export default function TeacherAnnouncementsPage() {
               {visible.length ? (
                 <div className="space-y-3">
                   {visible.map((item) => (
-                    <article key={item.id} className="rounded-md border border-slate-200 p-4 dark:border-slate-800">
-                      <p className="font-semibold text-slate-950 dark:text-white">{item.title}</p>
-                      <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600 dark:text-slate-300">{item.discription}</p>
+                    <article key={item.id} className="rounded-md border border-slate-200 p-4">
+                      <p className="font-semibold text-slate-950">{item.title}</p>
+                      <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600">{item.discription}</p>
                       <p className="mt-3 text-xs font-medium text-slate-500">{formatDate(item.date)}</p>
                     </article>
                   ))}

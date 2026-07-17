@@ -93,7 +93,7 @@ export default function TeacherStudentsPage() {
           <Panel title="Student Directory" description={`${visible.length} students`}>
             {visible.length ? (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-800">
+                <table className="min-w-full divide-y divide-slate-100 text-sm">
                   <thead>
                     <tr className="text-left text-xs font-semibold uppercase text-slate-500">
                       <th className="px-3 py-3">Name</th>
@@ -105,17 +105,17 @@ export default function TeacherStudentsPage() {
                       <th className="px-3 py-3 text-right">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  <tbody className="divide-y divide-slate-100">
                     {visible.map((student) => (
-                      <tr key={`${student.class_id}-${student.id}`} className="text-slate-700 dark:text-slate-200">
-                        <td className="px-3 py-3 font-semibold text-slate-950 dark:text-white">{student.name || "-"}</td>
+                      <tr key={`${student.class_id}-${student.id}`} className="text-slate-700">
+                        <td className="px-3 py-3 font-semibold text-slate-950">{student.name || "-"}</td>
                         <td className="px-3 py-3">{studentDisplayId(student)}</td>
                         <td className="px-3 py-3">{student.parent_mobile_number || student.phone || "-"}</td>
                         <td className="px-3 py-3">{student.course_name || "-"} / {student.class_name || "-"}</td>
                         <td className="px-3 py-3">{attendancePercentage(student)}%</td>
                         <td className="px-3 py-3">{performanceSummary(student)}</td>
                         <td className="px-3 py-3 text-right">
-                          <button type="button" className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800" onClick={() => setSelected(student)}>
+                          <button type="button" className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50" onClick={() => setSelected(student)}>
                             View
                           </button>
                         </td>
@@ -133,17 +133,17 @@ export default function TeacherStudentsPage() {
 
       {selected ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-3 sm:items-center">
-          <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl dark:bg-slate-900">
+          <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
             <div className="mb-5 flex items-start gap-3">
-              <div className="grid h-12 w-12 place-items-center rounded-md bg-cyan-50 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300">
+              <div className="grid h-12 w-12 place-items-center rounded-md bg-cyan-50 text-cyan-700">
                 <UserRound size={22} />
               </div>
               <div className="min-w-0">
-                <h3 className="truncate text-lg font-semibold text-slate-950 dark:text-white">{selected.name}</h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">{selected.course_name || "-"} / {selected.class_name || "-"}</p>
+                <h3 className="truncate text-lg font-semibold text-slate-950">{selected.name}</h3>
+                <p className="text-sm text-slate-500">{selected.course_name || "-"} / {selected.class_name || "-"}</p>
               </div>
             </div>
-            <div className="grid gap-3 text-sm text-slate-700 dark:text-slate-200">
+            <div className="grid gap-3 text-sm text-slate-700">
               <p><span className="font-semibold">Student ID:</span> {studentDisplayId(selected)}</p>
               <p><span className="font-semibold">Guardian:</span> {selected.f_name || "-"}</p>
               <p className="flex items-center gap-2"><Phone size={16} /> {selected.parent_mobile_number || selected.phone || "-"}</p>

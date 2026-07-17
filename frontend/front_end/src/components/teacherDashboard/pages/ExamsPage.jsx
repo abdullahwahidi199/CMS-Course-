@@ -159,10 +159,10 @@ export default function TeacherExamsPage() {
               {visible.length ? (
                 <div className="space-y-3">
                   {visible.map((exam) => (
-                    <article key={exam.id} className="rounded-md border border-slate-200 p-3 dark:border-slate-800">
+                    <article key={exam.id} className="rounded-md border border-slate-200 p-3">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                          <p className="font-semibold text-slate-950 dark:text-white">{exam.title}</p>
+                          <p className="font-semibold text-slate-950">{exam.title}</p>
                           <p className="text-sm text-slate-500">{exam.batch_name || "-"} / {formatDate(exam.assessment_date)} / {exam.results?.length || 0} results</p>
                         </div>
                         <div className="flex flex-wrap gap-2">

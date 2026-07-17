@@ -36,13 +36,13 @@ function exportCsv(columns, rows, filename) {
 
 function MobileRowCard({ row, columns, actions, bulkActions, selected, setSelected, calendar }) {
   return (
-    <article className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <article className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+          <p className="truncate text-sm font-semibold text-slate-900">
             {displayValue(row, columns[0], calendar) || "Record"}
           </p>
-          {columns[1] ? <p className="truncate text-xs text-slate-500 dark:text-slate-400">{displayValue(row, columns[1], calendar)}</p> : null}
+          {columns[1] ? <p className="truncate text-xs text-slate-500">{displayValue(row, columns[1], calendar)}</p> : null}
         </div>
         {bulkActions ? (
           <input
@@ -56,16 +56,16 @@ function MobileRowCard({ row, columns, actions, bulkActions, selected, setSelect
       </div>
       <dl className="grid grid-cols-1 gap-2">
         {columns.slice(2).map((column) => (
-          <div key={column.key} className="flex items-start justify-between gap-3 border-t border-slate-100 pt-2 text-sm dark:border-slate-800">
+          <div key={column.key} className="flex items-start justify-between gap-3 border-t border-slate-100 pt-2 text-sm">
             <dt className="shrink-0 text-xs font-medium uppercase text-slate-400">{column.label}</dt>
-            <dd className="min-w-0 text-right text-slate-700 dark:text-slate-200">{displayValue(row, column, calendar)}</dd>
+            <dd className="min-w-0 text-right text-slate-700">{displayValue(row, column, calendar)}</dd>
           </div>
         ))}
       </dl>
       {actions ? (
-        <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+        <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
           {actions(row).map((action) => (
-            <button key={action.label} className="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800" onClick={action.onClick}>
+            <button key={action.label} className="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50" onClick={action.onClick}>
               {action.label}
             </button>
           ))}
@@ -77,14 +77,14 @@ function MobileRowCard({ row, columns, actions, bulkActions, selected, setSelect
 
 function TableSkeleton() {
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-slate-800">
-        <div className="h-5 w-32 animate-pulse rounded bg-slate-200 dark:bg-slate-800" />
-        <div className="h-10 w-52 animate-pulse rounded bg-slate-200 dark:bg-slate-800" />
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b border-slate-100 p-4">
+        <div className="h-5 w-32 animate-pulse rounded bg-slate-200" />
+        <div className="h-10 w-52 animate-pulse rounded bg-slate-200" />
       </div>
       <div className="space-y-3 p-4">
         {[0, 1, 2, 3].map((item) => (
-          <div key={item} className="h-12 animate-pulse rounded bg-slate-200 dark:bg-slate-800" />
+          <div key={item} className="h-12 animate-pulse rounded bg-slate-200" />
         ))}
       </div>
     </div>
@@ -136,21 +136,21 @@ export default function DataTable({
   if (loading) return <TableSkeleton />;
 
   if (error) {
-    return <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">{error}</div>;
+    return <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>;
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex flex-col gap-3 border-b border-slate-100 p-4 md:flex-row md:items-center md:justify-between dark:border-slate-800">
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-slate-100 p-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{title}</h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400">{filteredRows.length} records</p>
+          <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+          <p className="text-xs text-slate-500">{filteredRows.length} records</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex min-w-52 items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-700">
+          <label className="flex min-w-52 items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm">
             <Search size={16} className="text-slate-400" />
             <input
-              className="w-full bg-transparent text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100"
+              className="w-full bg-transparent text-slate-900 outline-none placeholder:text-slate-400"
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
@@ -162,7 +162,7 @@ export default function DataTable({
           {bulkActions?.map((action) => (
             <button
               key={action.label}
-              className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200"
+              className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 disabled:opacity-40"
               disabled={!selectedRows.length}
               onClick={() => action.onClick(selectedRows)}
             >
@@ -170,7 +170,7 @@ export default function DataTable({
             </button>
           ))}
           <button
-            className="inline-flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            className="inline-flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             onClick={() => exportCsv(columns, filteredRows, `${title.toLowerCase().replaceAll(" ", "-")}.csv`)}
           >
             <Download size={16} /> Export
@@ -180,7 +180,7 @@ export default function DataTable({
 
       <div className="grid gap-3 p-3 md:hidden">
         {pagedRows.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">{empty}</div>
+          <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">{empty}</div>
         ) : (
           pagedRows.map((row) => (
             <MobileRowCard
@@ -198,8 +198,8 @@ export default function DataTable({
       </div>
 
       <div className="hidden overflow-x-auto md:block">
-        <table className="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
-          <thead className="bg-slate-50 dark:bg-slate-950">
+        <table className="min-w-full divide-y divide-slate-200 text-sm">
+          <thead className="bg-slate-50">
             <tr>
               {bulkActions ? (
                 <th className="w-10 px-4 py-3">
@@ -215,20 +215,20 @@ export default function DataTable({
               {columns.map((column) => (
                 <th
                   key={column.key}
-                  className="cursor-pointer px-4 py-3 text-left font-semibold text-slate-600 dark:text-slate-300"
+                  className="cursor-pointer px-4 py-3 text-left font-semibold text-slate-600"
                   onClick={() => toggleSort(column.key)}
                 >
                   {column.label}
                   {sort.key === column.key ? <span className="ml-1 text-xs text-slate-400">{sort.direction === "asc" ? "Asc" : "Desc"}</span> : null}
                 </th>
               ))}
-              {actions ? <th className="px-4 py-3 text-right font-semibold text-slate-600 dark:text-slate-300">Actions</th> : null}
+              {actions ? <th className="px-4 py-3 text-right font-semibold text-slate-600">Actions</th> : null}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+          <tbody className="divide-y divide-slate-100">
             {pagedRows.length === 0 ? (
               <tr>
-                <td className="px-4 py-6 text-center text-slate-500 dark:text-slate-400" colSpan={columns.length + (actions ? 1 : 0) + (bulkActions ? 1 : 0)}>
+                <td className="px-4 py-6 text-center text-slate-500" colSpan={columns.length + (actions ? 1 : 0) + (bulkActions ? 1 : 0)}>
                   {empty}
                 </td>
               </tr>
@@ -245,7 +245,7 @@ export default function DataTable({
                     </td>
                   ) : null}
                   {columns.map((column) => (
-                    <td key={column.key} className="whitespace-nowrap px-4 py-3 text-slate-700 dark:text-slate-200">
+                    <td key={column.key} className="whitespace-nowrap px-4 py-3 text-slate-700">
                       {displayValue(row, column, calendar)}
                     </td>
                   ))}
@@ -253,7 +253,7 @@ export default function DataTable({
                     <td className="whitespace-nowrap px-4 py-3 text-right">
                       <div className="inline-flex gap-2">
                         {actions(row).map((action) => (
-                          <button key={action.label} className="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800" onClick={action.onClick}>
+                          <button key={action.label} className="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50" onClick={action.onClick}>
                             {action.label}
                           </button>
                         ))}
@@ -267,11 +267,11 @@ export default function DataTable({
         </table>
       </div>
 
-      <div className="flex items-center justify-between border-t border-slate-100 p-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300">
+      <div className="flex items-center justify-between border-t border-slate-100 p-3 text-sm text-slate-600">
         <span>Page {page} of {pages}</span>
         <div className="flex gap-2">
-          <button className="rounded-md border border-slate-200 px-3 py-1 disabled:opacity-40 dark:border-slate-700" disabled={page === 1} onClick={() => setPage((value) => value - 1)}>Previous</button>
-          <button className="rounded-md border border-slate-200 px-3 py-1 disabled:opacity-40 dark:border-slate-700" disabled={page === pages} onClick={() => setPage((value) => value + 1)}>Next</button>
+          <button className="rounded-md border border-slate-200 px-3 py-1 disabled:opacity-40" disabled={page === 1} onClick={() => setPage((value) => value - 1)}>Previous</button>
+          <button className="rounded-md border border-slate-200 px-3 py-1 disabled:opacity-40" disabled={page === pages} onClick={() => setPage((value) => value + 1)}>Next</button>
         </div>
       </div>
     </div>

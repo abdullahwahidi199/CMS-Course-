@@ -23,14 +23,14 @@ export default function TeacherProfilePage() {
       {profile.error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{profile.error}</div> : null}
       {!profile.loading && !profile.error ? (
         <>
-          <section className="rounded-2xl bg-gradient-to-r from-cyan-700 to-slate-900 p-5 text-white shadow-sm">
+          <section className="rounded-xl border border-slate-200 bg-white p-5 text-slate-950 shadow-sm">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-              <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/15 text-2xl font-bold">
+              <div className="grid h-16 w-16 place-items-center rounded-2xl bg-cyan-50 text-2xl font-bold text-cyan-700">
                 {(teacher.full_name || "T").charAt(0).toUpperCase()}
               </div>
               <div>
                 <h3 className="text-2xl font-semibold">{teacher.full_name}</h3>
-                <p className="text-sm text-cyan-100">{teacher.subject || "Subject"} / {teacher.department || "Department"}</p>
+                <p className="text-sm text-slate-500">{teacher.subject || "Subject"} / {teacher.department || "Department"}</p>
               </div>
             </div>
           </section>

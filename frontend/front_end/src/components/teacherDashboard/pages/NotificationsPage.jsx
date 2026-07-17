@@ -73,14 +73,14 @@ export default function TeacherNotificationsPage() {
             {visible.length ? (
               <div className="space-y-3">
                 {visible.map((item) => (
-                  <article key={item.id} className={`rounded-md border p-4 dark:border-slate-800 ${item.is_read ? "border-slate-200 bg-white dark:bg-slate-900" : "border-cyan-200 bg-cyan-50/60 dark:bg-cyan-950/30"}`}>
+                  <article key={item.id} className={`rounded-md border p-4 ${item.is_read ? "border-slate-200 bg-white" : "border-cyan-200 bg-cyan-50/60"}`}>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-semibold text-slate-950 dark:text-white">{item.title}</h3>
+                          <h3 className="font-semibold text-slate-950">{item.title}</h3>
                           {statusBadge(item.is_read ? "closed" : "active")}
                         </div>
-                        <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{item.message}</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">{item.message}</p>
                         <p className="mt-2 text-xs text-slate-500">{item.notification_type || "notification"} / {formatDate(item.created_at)}</p>
                       </div>
                       {!item.is_read ? <button type="button" className={buttonClass("secondary")} onClick={() => markRead(item)}>Mark Read</button> : null}
