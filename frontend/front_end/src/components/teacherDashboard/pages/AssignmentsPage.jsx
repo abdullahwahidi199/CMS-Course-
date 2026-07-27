@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Download, FileText, Plus, Send, Users } from "lucide-react";
 import instance from "../../../api/axiosInstance";
 import { formatApiError } from "../../../utils/apiErrors";
+import { formatBatchLabel } from "../../../utils/batchLabel";
 import { mediaUrl } from "../../../utils/mediaUrl";
 import TeacherPageShell from "./TeacherPageShell";
 import { EmptyState, ErrorState, LoadingSkeleton, Panel, SearchBox, StatTile, Toast } from "./TeacherUi";
@@ -41,7 +42,8 @@ export default function TeacherAssignmentsPage() {
   const visible = useMemo(() => {
     const term = filters.search.trim().toLowerCase();
     return assignments.filter((item) => {
-      const className = classes.find((row) => row.id === item.class_assigned)?.name || "";
+      const classInfo = classes.find((row) => row.id === item.class_assigned);
+      const className = formatBatchLabel(classInfo, "");
       const closed = new Date(item.due_date) < new Date();
       const matchesSearch = !term || [item.title, item.discription, className].join(" ").toLowerCase().includes(term);
       const matchesClass = !filters.classId || String(item.class_assigned) === String(filters.classId);
@@ -93,7 +95,7 @@ export default function TeacherAssignmentsPage() {
                 <textarea required className={inputClass()} rows={4} placeholder="Instructions / description" value={form.discription} onChange={(event) => setForm({ ...form, discription: event.target.value })} />
                 <div className="grid gap-3 sm:grid-cols-2">
                   <select required className={inputClass()} value={form.class_assigned} onChange={(event) => setForm({ ...form, class_assigned: event.target.value })}>
-                    {classes.map((item) => <option key={item.id} value={item.id}>{item.course_name ? `${item.course_name} / ` : ""}{item.name}</option>)}
+                    {classes.map((item) => <option key={item.id} value={item.id}>{formatBatchLabel(item)}</option>)}
                   </select>
                   <input required type="date" className={inputClass()} value={form.due_date} onChange={(event) => setForm({ ...form, due_date: event.target.value })} />
                   <input required type="number" min="1" className={inputClass()} value={form.total_marks} onChange={(event) => setForm({ ...form, total_marks: event.target.value })} />
@@ -108,7 +110,7 @@ export default function TeacherAssignmentsPage() {
                 <SearchBox value={filters.search} onChange={(search) => setFilters({ ...filters, search })} placeholder="Search assignments" />
                 <select className={inputClass()} value={filters.classId} onChange={(event) => setFilters({ ...filters, classId: event.target.value })}>
                   <option value="">All classes</option>
-                  {classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                  {classes.map((item) => <option key={item.id} value={item.id}>{formatBatchLabel(item)}</option>)}
                 </select>
                 <select className={inputClass()} value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}>
                   <option value="">All statuses</option>
@@ -126,7 +128,7 @@ export default function TeacherAssignmentsPage() {
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div>
                             <p className="font-semibold text-slate-950">{item.title}</p>
-                            <p className="text-sm text-slate-500">{classInfo?.name || `Class ${item.class_assigned}`} / Due {formatDate(item.due_date)} / {item.total_marks} marks</p>
+                            <p className="text-sm text-slate-500">{formatBatchLabel(classInfo, `Class ${item.class_assigned}`)} / Due {formatDate(item.due_date)} / {item.total_marks} marks</p>
                           </div>
                           <div className="flex flex-wrap gap-2">
                             {statusBadge(closed ? "closed" : "active")}

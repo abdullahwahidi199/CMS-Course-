@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { BarChart3, CalendarCheck, Check, Clock, Download, Save, Users } from "lucide-react";
 import instance from "../../../api/axiosInstance";
 import { formatApiError } from "../../../utils/apiErrors";
+import { formatBatchLabel } from "../../../utils/batchLabel";
 import TeacherPageShell from "./TeacherPageShell";
 import { EmptyState, ErrorState, LoadingSkeleton, Panel, StatTile, Toast } from "./TeacherUi";
 import { buttonClass, formatDate, inputClass, normalizeList, statusBadge, todayValue } from "./teacherUtils.jsx";
@@ -164,7 +165,7 @@ export default function TeacherAttendancePage() {
           <Panel title="Session Controls" description="Pick a class and date, then open or resume the attendance session.">
             <div className="grid gap-3 lg:grid-cols-[1fr_180px_auto]">
               <select className={inputClass()} value={classId} onChange={(event) => setClassId(event.target.value)}>
-                {classes.map((item) => <option key={item.id} value={item.id}>{item.course_name ? `${item.course_name} / ` : ""}{item.name}</option>)}
+                {classes.map((item) => <option key={item.id} value={item.id}>{formatBatchLabel(item)}</option>)}
               </select>
               <input type="date" className={inputClass()} value={date} onChange={(event) => setDate(event.target.value)} />
               <button type="button" className={buttonClass()} onClick={openSession} disabled={saving || !classId}>
@@ -174,7 +175,7 @@ export default function TeacherAttendancePage() {
           </Panel>
 
           <Panel
-            title={session ? `${selectedClass?.name || "Class"} / ${formatDate(date)}` : "Attendance Sheet"}
+            title={session ? `${formatBatchLabel(selectedClass, "Class")} / ${formatDate(date)}` : "Attendance Sheet"}
             description={session ? `Status: ${session.status}` : "Open a session to mark students."}
             actions={records.length ? statusOptions.map((item) => (
               <button key={item.value} type="button" className={buttonClass("secondary")} onClick={() => bulkMark(item.value)}>
@@ -248,7 +249,7 @@ export default function TeacherAttendancePage() {
                   <article key={item.id} className="rounded-md border border-slate-200 p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-semibold text-slate-950">{item.batch_name}</p>
+                        <p className="font-semibold text-slate-950">{formatBatchLabel(item)}</p>
                         <p className="text-sm text-slate-500">{formatDate(item.date)}</p>
                       </div>
                       {statusBadge(item.status)}

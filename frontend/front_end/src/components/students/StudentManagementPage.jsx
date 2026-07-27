@@ -17,6 +17,7 @@ import PageHeader from "../shared/PageHeader";
 import CalendarDatePicker from "../shared/CalendarDatePicker";
 import instance from "../../api/axiosInstance";
 import { formatApiError } from "../../utils/apiErrors";
+import { formatBatchLabel } from "../../utils/batchLabel";
 
 const emptyDetail = {
   student: null,
@@ -210,7 +211,7 @@ function StudentDetailsDrawer({ detail, loading, error, onClose }) {
                   </p>
                   <p>
                     <span className="font-medium">Batch:</span>{" "}
-                    {student.current_enrollments?.[0]?.batch_name || "-"}
+                    {formatBatchLabel(student.current_enrollments?.[0])}
                   </p>
                   <p>
                     <span className="font-medium">Status:</span>{" "}
@@ -264,7 +265,11 @@ function StudentDetailsDrawer({ detail, loading, error, onClose }) {
                 rows={enrollments}
                 columns={[
                   { key: "course_name", label: "Course" },
-                  { key: "batch_name", label: "Batch" },
+                  {
+                    key: "batch_name",
+                    label: "Batch",
+                    render: (row) => formatBatchLabel(row),
+                  },
                   { key: "enrollment_date", label: "Enrollment Date" },
                   { key: "completed_date", label: "Completed" },
                   { key: "status", label: "Status" },
@@ -348,7 +353,11 @@ function StudentDetailsDrawer({ detail, loading, error, onClose }) {
                   columns={[
                     { key: "assessment_title", label: "Assessment" },
                     { key: "course_name", label: "Course" },
-                    { key: "batch_name", label: "Batch" },
+                    {
+                      key: "batch_name",
+                      label: "Batch",
+                      render: (row) => formatBatchLabel(row),
+                    },
                     { key: "marks_obtained", label: "Marks" },
                     { key: "percentage", label: "%" },
                     { key: "grade", label: "Grade" },
@@ -631,7 +640,7 @@ function PromoteStudentModal({
               readOnly
               value={
                 selectedStudents.length === 1
-                  ? firstEnrollment?.batch_name || "No active batch"
+                  ? formatBatchLabel(firstEnrollment, "No active batch")
                   : "Multiple selected"
               }
               className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700"
@@ -650,8 +659,7 @@ function PromoteStudentModal({
               <option value="">Select batch</option>
               {availableBatches.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {batch.course_name ? `${batch.course_name} / ` : ""}
-                  {batch.name}
+                  {formatBatchLabel(batch)}
                 </option>
               ))}
             </select>
@@ -918,7 +926,7 @@ export default function StudentManagementPage() {
       {
         key: "current_class",
         label: "Current Class",
-        render: (row) => row.current_enrollments?.[0]?.batch_name || "-",
+        render: (row) => formatBatchLabel(row.current_enrollments?.[0]),
       },
       {
         key: "current_course",
@@ -995,8 +1003,7 @@ export default function StudentManagementPage() {
               <option value="">All batches</option>
               {batches.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {batch.course_name ? `${batch.course_name} / ` : ""}
-                  {batch.name}
+                  {formatBatchLabel(batch)}
                 </option>
               ))}
             </select>

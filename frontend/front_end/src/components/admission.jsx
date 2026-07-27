@@ -11,6 +11,7 @@ import DataTable from "./shared/DataTable";
 import PageHeader from "./shared/PageHeader";
 import instance from "../api/axiosInstance";
 import { formatApiError } from "../utils/apiErrors";
+import { formatBatchLabel } from "../utils/batchLabel";
 
 const emptyAdmission = {
   first_name: "",
@@ -188,7 +189,7 @@ export default function Admission() {
       {
         key: "batch",
         label: "Current Batch",
-        render: (row) => row.current_enrollments?.[0]?.batch_name || "-",
+        render: (row) => formatBatchLabel(row.current_enrollments?.[0]),
       },
       {
         key: "is_active",
@@ -375,8 +376,7 @@ export default function Admission() {
                 <option value="">Select batch</option>
                 {filteredBatches.map((batch) => (
                   <option key={batch.id} value={batch.id}>
-                    {batch.course_name ? `${batch.course_name} - ` : ""}
-                    {batch.name}
+                    {formatBatchLabel(batch)}
                   </option>
                 ))}
               </select>
@@ -412,8 +412,9 @@ export default function Admission() {
             </div>
             <div>
               <span className="font-semibold">Batch:</span>{" "}
-              {batches.find((batch) => String(batch.id) === String(form.batch))
-                ?.name || "-"}
+              {formatBatchLabel(
+                batches.find((batch) => String(batch.id) === String(form.batch)),
+              )}
             </div>
           </div>
         ) : null}

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { BookOpen, CalendarDays, Clock, Filter, MapPin, Users } from "lucide-react";
 import { useApiResource } from "../../../hooks/useApiResource";
+import { formatBatchLabel } from "../../../utils/batchLabel";
 import TeacherPageShell from "./TeacherPageShell";
 import { EmptyState, ErrorState, LoadingSkeleton, Panel, SearchBox, StatTile } from "./TeacherUi";
 import { formatDate, formatTime, inputClass, normalizeList } from "./teacherUtils.jsx";
@@ -62,7 +63,7 @@ export default function TeacherClassesPage() {
                   <div className="mb-4 flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-xs font-semibold uppercase text-cyan-700">{item.course_name || item.subjects || "Course"}</p>
-                      <h3 className="mt-1 truncate text-lg font-semibold text-slate-950">{item.name}</h3>
+                      <h3 className="mt-1 truncate text-lg font-semibold text-slate-950">{formatBatchLabel(item)}</h3>
                     </div>
                     <span className="rounded-md bg-cyan-50 p-2 text-cyan-700">
                       <BookOpen size={20} />

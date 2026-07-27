@@ -5,6 +5,7 @@ import PageHeader from "./shared/PageHeader";
 import StatCard from "./shared/StatCard";
 import CalendarDatePicker from "./shared/CalendarDatePicker";
 import instance from "../api/axiosInstance";
+import { formatBatchLabel } from "../utils/batchLabel";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const statuses = [
@@ -208,7 +209,7 @@ export default function Attendance() {
           <span className="mb-1 block font-medium text-gray-700">Batch</span>
           <select required className={inputClass()} value={filters.batch} onChange={(event) => setFilters({ ...filters, batch: event.target.value })}>
             <option value="">Select batch</option>
-            {filteredBatches.map((batch) => <option key={batch.id} value={batch.id}>{batch.course_name ? `${batch.course_name} - ` : ""}{batch.name}</option>)}
+            {filteredBatches.map((batch) => <option key={batch.id} value={batch.id}>{formatBatchLabel(batch)}</option>)}
           </select>
         </label>
         <label className="block text-sm">
@@ -237,7 +238,7 @@ export default function Attendance() {
         <section className="space-y-4 rounded-md bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-base font-semibold text-gray-900">{session.course_name || "-"} / {session.batch_name || "-"}</h2>
+              <h2 className="text-base font-semibold text-gray-900">{formatBatchLabel(session)}</h2>
               <p className="text-sm text-gray-500">{session.date} · {statusLabel(session.status)}</p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -265,7 +266,7 @@ export default function Attendance() {
         columns={[
           { key: "date", label: "Date" },
           { key: "course_name", label: "Course" },
-          { key: "batch_name", label: "Batch" },
+          { key: "batch_name", label: "Batch", render: (row) => formatBatchLabel(row) },
           { key: "teacher_name", label: "Teacher" },
           { key: "session_topic", label: "Topic" },
           { key: "status", label: "Status", render: (row) => statusLabel(row.status) },

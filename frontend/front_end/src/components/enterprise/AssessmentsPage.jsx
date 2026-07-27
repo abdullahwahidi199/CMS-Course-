@@ -5,6 +5,7 @@ import PageHeader from "../shared/PageHeader";
 import StatCard from "../shared/StatCard";
 import CalendarDatePicker from "../shared/CalendarDatePicker";
 import { apiCreate, apiDelete, apiGet, apiPost, apiUpdate, useApiResource } from "../../hooks/useApiResource";
+import { formatBatchLabel } from "../../utils/batchLabel";
 
 const emptyForm = {
   course: "",
@@ -239,7 +240,7 @@ export default function AssessmentsPage() {
 
   const columns = [
     { key: "title", label: "Title" },
-    { key: "batch_name", label: "Batch" },
+    { key: "batch_name", label: "Batch", render: (row) => formatBatchLabel(row) },
     { key: "teacher_name", label: "Teacher" },
     { key: "assessment_type", label: "Type" },
     { key: "assessment_date", label: "Date" },
@@ -322,7 +323,7 @@ export default function AssessmentsPage() {
               <option value="">All batches</option>
               {classes.results
                 .filter((item) => !serverFilters.course || Number(item.course) === Number(serverFilters.course))
-                .map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                .map((item) => <option key={item.id} value={item.id}>{formatBatchLabel(item)}</option>)}
             </select>
           </Field>
           <Field label="Teacher">
@@ -360,7 +361,7 @@ export default function AssessmentsPage() {
               setForm((current) => ({ ...current, batch: event.target.value, course: batch?.course || "" }));
             }}>
               <option value="">Select batch</option>
-              {classes.results.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              {classes.results.map((item) => <option key={item.id} value={item.id}>{formatBatchLabel(item)}</option>)}
             </select>
           </Field>
           <Field label="Teacher">

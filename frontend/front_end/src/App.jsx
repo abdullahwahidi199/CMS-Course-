@@ -65,6 +65,7 @@ import RoleManagementPage from "./components/enterprise/RoleManagementPage";
 import StudentManagementPage from "./components/students/StudentManagementPage";
 import CourseManagementPage from "./components/academic/CourseManagementPage";
 import BatchManagementPage from "./components/academic/BatchManagementPage";
+import DocumentationPage from "./components/documentation/DocumentationPage";
 import OnlinePageManager from "./components/onlinePage/OnlinePageManager";
 import PublicSite from "./components/publicSite/PublicSite";
 
@@ -267,6 +268,22 @@ function App() {
             element={
               <ProtectedRoute permission="online-page.view">
                 <OnlinePageManager />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="documentation"
+            element={
+              <ProtectedRoute>
+                <DocumentationPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="documentation/:slug"
+            element={
+              <ProtectedRoute>
+                <DocumentationPage />
               </ProtectedRoute>
             }
           />

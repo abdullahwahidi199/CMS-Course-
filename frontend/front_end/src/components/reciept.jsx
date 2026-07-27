@@ -8,6 +8,7 @@ import {
   Calendar,
   CreditCard,
 } from "lucide-react";
+import { formatBatchLabel } from "../utils/batchLabel";
 import { mediaUrl } from "../utils/mediaUrl";
 
 const ReceiptPrintModal = ({ receipt, tenant, isOpen, onClose }) => {
@@ -191,7 +192,7 @@ const ReceiptPrintModal = ({ receipt, tenant, isOpen, onClose }) => {
 
                   <p className="text-gray-600">Class/Batch:</p>
                   <p className="font-medium text-gray-900 text-right">
-                    {receipt.course_name || receipt.batch_name || "N/A"}
+                    {formatBatchLabel(receipt, "N/A")}
                   </p>
                 </div>
               </div>

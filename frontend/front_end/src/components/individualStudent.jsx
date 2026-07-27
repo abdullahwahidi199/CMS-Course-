@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowUpCircle, Pencil, Trash2, Save, XCircle } from "lucide-react";
 import instance from "../api/axiosInstance";
+import { formatBatchLabel } from "../utils/batchLabel";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -215,8 +216,10 @@ function IndividaulStudent() {
               <p>{student.name}</p>
               <p>{student.f_name}</p>
               <p>
-                {student.current_enrollments?.[0]?.batch_name ||
-                  "No active batch"}
+                {formatBatchLabel(
+                  student.current_enrollments?.[0],
+                  "No active batch",
+                )}
               </p>
               <p>{student.role_number}</p>
               <p>{student.parent_mobile_number}</p>
@@ -348,7 +351,7 @@ function IndividaulStudent() {
                 </span>
                 <input
                   readOnly
-                  value={currentEnrollment?.batch_name || "No active class"}
+                  value={formatBatchLabel(currentEnrollment, "No active class")}
                   className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700"
                 />
               </label>
@@ -370,7 +373,11 @@ function IndividaulStudent() {
                   <option value="">Select class</option>
                   {availableClasses.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.course_name || currentEnrollment?.course_name || "Course"} / {item.name}
+                      {formatBatchLabel({
+                        ...item,
+                        course_name:
+                          item.course_name || currentEnrollment?.course_name,
+                      })}
                     </option>
                   ))}
                 </select>

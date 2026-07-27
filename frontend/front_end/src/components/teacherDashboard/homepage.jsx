@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useApiResource } from "../../hooks/useApiResource";
 import usePermissions from "../../hooks/usePermissions";
+import { formatBatchLabel } from "../../utils/batchLabel";
 import TeacherPageShell from "./pages/TeacherPageShell";
 import { EmptyState, ErrorState, LoadingSkeleton, Panel, StatTile } from "./pages/TeacherUi";
 import { formatDate, formatTime, normalizeList } from "./pages/teacherUtils.jsx";
@@ -109,7 +110,7 @@ export default function TeacherHomepage() {
               {(dashboardData.todays_classes || []).length ? (
                 <div className="space-y-3">
                   {dashboardData.todays_classes.map((item) => (
-                    <ListItem key={item.id} title={item.name} meta={`${formatTime(item.start_time)} - ${formatTime(item.end_time)}`} to={`/teacher/dashboard/classes/${item.id}`} />
+                    <ListItem key={item.id} title={formatBatchLabel(item)} meta={`${formatTime(item.start_time)} - ${formatTime(item.end_time)}`} to={`/teacher/dashboard/classes/${item.id}`} />
                   ))}
                 </div>
               ) : (
@@ -121,7 +122,7 @@ export default function TeacherHomepage() {
               {upcomingExams.length ? (
                 <div className="space-y-3">
                   {upcomingExams.map((item) => (
-                    <ListItem key={item.id} title={item.title} meta={`${item.batch_name || "Class"} / ${formatDate(item.assessment_date)}`} to="/teacher/dashboard/exams" />
+                    <ListItem key={item.id} title={item.title} meta={`${formatBatchLabel(item, "Class")} / ${formatDate(item.assessment_date)}`} to="/teacher/dashboard/exams" />
                   ))}
                 </div>
               ) : (

@@ -13,6 +13,7 @@ export const APP_ROUTES = [
   { label: "Roles & Permissions", path: "/admin/dashboard/roles", permission: "roles.view" },
   { label: "Notifications", path: "/admin/dashboard/notifications", permission: "notifications.view" },
   { label: "Online Page", path: "/admin/dashboard/online-page", permission: "online-page.view" },
+  { label: "Documentation", path: "/admin/dashboard/documentation" },
   { label: "Courses", path: "/admin/dashboard/courses", permission: "courses.view" },
   { label: "Batches", path: "/admin/dashboard/classes", permission: "batches.view" },
   { label: "Staff", path: "/admin/dashboard/staff", permission: "staff.view" },

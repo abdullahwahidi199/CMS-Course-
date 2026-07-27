@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Eye, Mail, Phone, UserRound, Users } from "lucide-react";
 import instance from "../../../api/axiosInstance";
 import { formatApiError } from "../../../utils/apiErrors";
+import { formatBatchLabel } from "../../../utils/batchLabel";
 import TeacherPageShell from "./TeacherPageShell";
 import { EmptyState, ErrorState, LoadingSkeleton, Panel, SearchBox, StatTile } from "./TeacherUi";
 import { attendancePercentage, inputClass, performanceSummary, studentDisplayId } from "./teacherUtils.jsx";
@@ -85,7 +86,7 @@ export default function TeacherStudentsPage() {
               <SearchBox value={filters.search} onChange={(search) => setFilters({ ...filters, search })} placeholder="Search name, ID, phone, class" />
               <select className={inputClass()} value={filters.classId} onChange={(event) => setFilters({ ...filters, classId: event.target.value })}>
                 <option value="">All classes</option>
-                {classes.map((item) => <option key={item.id} value={item.id}>{item.course_name ? `${item.course_name} / ` : ""}{item.name}</option>)}
+                {classes.map((item) => <option key={item.id} value={item.id}>{formatBatchLabel(item)}</option>)}
               </select>
             </div>
           </Panel>
@@ -111,7 +112,7 @@ export default function TeacherStudentsPage() {
                         <td className="px-3 py-3 font-semibold text-slate-950">{student.name || "-"}</td>
                         <td className="px-3 py-3">{studentDisplayId(student)}</td>
                         <td className="px-3 py-3">{student.parent_mobile_number || student.phone || "-"}</td>
-                        <td className="px-3 py-3">{student.course_name || "-"} / {student.class_name || "-"}</td>
+                        <td className="px-3 py-3">{formatBatchLabel(student)}</td>
                         <td className="px-3 py-3">{attendancePercentage(student)}%</td>
                         <td className="px-3 py-3">{performanceSummary(student)}</td>
                         <td className="px-3 py-3 text-right">

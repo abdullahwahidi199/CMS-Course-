@@ -19,6 +19,7 @@ const labels = {
   inventory: "Inventory Report",
   "stationery-sales": "Stationery Sales",
   notifications: "Notifications",
+  documentation: "Documentation",
   attendence: "Attendance",
   addmission: "Admissions",
   courses: "Courses",

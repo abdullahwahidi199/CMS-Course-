@@ -8,6 +8,7 @@ import instance from "../../api/axiosInstance";
 import ReceiptPrintModal from "../reciept";
 import CalendarDatePicker from "../shared/CalendarDatePicker";
 import { useCalendar } from "../../hooks/useCalendar";
+import { formatBatchLabel } from "../../utils/batchLabel";
 import { toShamsi } from "../../utils/calendar";
 const current = new Date();
 const currentShamsi = toShamsi(current);
@@ -100,11 +101,15 @@ export default function BillingPage() {
   const [paymentForm, setPaymentForm] = useState({
     invoice: "",
     amount_paid: "",
-    discount_amount: "0",
+    discount_amount: "",
     discount_notes: "",
     payment_method: "cash",
     reference_number: "",
     notes: "",
+  });
+  const [paymentFilters, setPaymentFilters] = useState({
+    batch: "",
+    student: "",
   });
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -129,6 +134,28 @@ export default function BillingPage() {
   const selectedInvoice = invoiceRows.find(
     (row) => String(row.id) === String(paymentForm.invoice),
   );
+  const paymentInvoiceRows = useMemo(() => {
+    const studentQuery = paymentFilters.student.trim().toLowerCase();
+    return invoiceRows.filter((row) => {
+      const isPayable =
+        Number(row.balance || 0) > 0 && row.status !== "cancelled";
+      const matchesBatch =
+        !paymentFilters.batch || String(row.batch) === paymentFilters.batch;
+      const matchesStudent =
+        !studentQuery ||
+        [
+          row.student_name,
+          row.student_role_number,
+          row.student_number_display,
+          row.student,
+          row.invoice_number,
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(studentQuery);
+      return isPayable && matchesBatch && matchesStudent;
+    });
+  }, [invoiceRows, paymentFilters]);
 
   const localSummary = useMemo(() => {
     const expected = invoiceRows.reduce(
@@ -217,15 +244,11 @@ export default function BillingPage() {
     setSubmitting(true);
     setMessage("");
     try {
-      const payload = {
-        ...paymentForm,
-        discount_amount: paymentForm.discount_amount || "0",
-      };
-      await apiCreate("/v1/payments/", payload);
+      await apiCreate("/v1/payments/", paymentForm);
       setPaymentForm({
         invoice: "",
         amount_paid: "",
-        discount_amount: "0",
+        discount_amount: "",
         discount_notes: "",
         payment_method: "cash",
         reference_number: "",
@@ -330,7 +353,7 @@ export default function BillingPage() {
     {
       key: "batch_name",
       label: "Batch",
-      render: (row) => row.batch_name || "Default",
+      render: (row) => formatBatchLabel(row, "Default"),
     },
     {
       key: "billing_cycle",
@@ -443,6 +466,10 @@ export default function BillingPage() {
             {
               label: "Collect",
               onClick: () => {
+                setPaymentFilters({
+                  batch: row.batch ? String(row.batch) : "",
+                  student: "",
+                });
                 setPaymentForm((form) => ({
                   ...form,
                   invoice: row.id,
@@ -508,6 +535,50 @@ export default function BillingPage() {
       {activeTab === "Collect Payment" ? (
         <Panel title="Collect Payment">
           <form className="grid gap-4 md:grid-cols-2" onSubmit={collectPayment}>
+            <Field label="Batch Filter">
+              <Select
+                value={paymentFilters.batch}
+                onChange={(e) => {
+                  setPaymentFilters({
+                    ...paymentFilters,
+                    batch: e.target.value,
+                  });
+                  setPaymentForm({
+                    ...paymentForm,
+                    invoice: "",
+                    amount_paid: "",
+                    discount_amount: "",
+                    discount_notes: "",
+                  });
+                }}
+              >
+                <option value="">All batches</option>
+                {batches.results.map((row) => (
+                  <option key={row.id} value={row.id}>
+                    {formatBatchLabel(row)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Search Student">
+              <Input
+                value={paymentFilters.student}
+                placeholder="Student name, ID, or invoice"
+                onChange={(e) => {
+                  setPaymentFilters({
+                    ...paymentFilters,
+                    student: e.target.value,
+                  });
+                  setPaymentForm({
+                    ...paymentForm,
+                    invoice: "",
+                    amount_paid: "",
+                    discount_amount: "",
+                    discount_notes: "",
+                  });
+                }}
+              />
+            </Field>
             <Field label="Invoice">
               <Select
                 required
@@ -516,7 +587,7 @@ export default function BillingPage() {
                   setPaymentForm({
                     ...paymentForm,
                     invoice: e.target.value,
-                    discount_amount: "0",
+                    discount_amount: "",
                     discount_notes: "",
                     amount_paid:
                       invoiceRows.find(
@@ -526,18 +597,12 @@ export default function BillingPage() {
                 }
               >
                 <option value="">Select invoice</option>
-                {invoiceRows
-                  .filter(
-                    (row) =>
-                      Number(row.balance || 0) > 0 &&
-                      row.status !== "cancelled",
-                  )
-                  .map((row) => (
-                    <option key={row.id} value={row.id}>
-                      {row.invoice_number} - {row.student_name} -{" "}
-                      {money(row.balance)}
-                    </option>
-                  ))}
+                {paymentInvoiceRows.map((row) => (
+                  <option key={row.id} value={row.id}>
+                    {row.invoice_number} - {row.student_name} -{" "}
+                    {formatBatchLabel(row, "No batch")} - {money(row.balance)}
+                  </option>
+                ))}
               </Select>
             </Field>
             <Field label="Discount">
@@ -735,7 +800,7 @@ export default function BillingPage() {
                   <option value="">Select batch</option>
                   {batches.results.map((row) => (
                     <option key={row.id} value={row.id}>
-                      {row.name}
+                      {formatBatchLabel(row)}
                     </option>
                   ))}
                 </Select>
@@ -756,7 +821,7 @@ export default function BillingPage() {
                   <option value="">Select enrollment</option>
                   {enrollments.results.map((row) => (
                     <option key={row.id} value={row.id}>
-                      {row.student_name} - {row.course_name} / {row.batch_name}
+                      {row.student_name} - {formatBatchLabel(row)}
                     </option>
                   ))}
                 </Select>
@@ -810,7 +875,7 @@ export default function BillingPage() {
                     )
                     .map((row) => (
                       <option key={row.id} value={row.id}>
-                        {row.name}
+                        {formatBatchLabel(row)}
                       </option>
                     ))}
                 </Select>
@@ -967,7 +1032,11 @@ export default function BillingPage() {
             columns={[
               { key: "student_name", label: "Student" },
               { key: "course_name", label: "Course" },
-              { key: "batch_name", label: "Batch" },
+              {
+                key: "batch_name",
+                label: "Batch",
+                render: (row) => formatBatchLabel(row),
+              },
               {
                 key: "billing_cycle",
                 label: "Cycle",

@@ -1,5 +1,6 @@
 import { Mail, Phone, School, User } from "lucide-react";
 import { useApiResource } from "../../../hooks/useApiResource";
+import { formatBatchLabel } from "../../../utils/batchLabel";
 import TeacherPageShell from "./TeacherPageShell";
 
 function InfoCard({ icon: Icon, label, value }) {
@@ -45,7 +46,7 @@ export default function TeacherProfilePage() {
             <div className="grid gap-3 md:grid-cols-2">
               {(teacher.classes || []).map((item) => (
                 <div key={item.id} className="rounded-xl border border-slate-200 p-3">
-                  <p className="font-semibold text-slate-900">{item.course_name ? `${item.course_name} / ` : ""}{item.name}</p>
+                  <p className="font-semibold text-slate-900">{formatBatchLabel(item)}</p>
                   <p className="text-sm text-slate-500">{item.start_time || "-"} - {item.end_time || "-"}</p>
                 </div>
               ))}

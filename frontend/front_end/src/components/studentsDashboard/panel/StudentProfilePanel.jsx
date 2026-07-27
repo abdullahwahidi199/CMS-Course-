@@ -1,5 +1,6 @@
 import { User } from "lucide-react";
 import { useApiResource } from "../../../hooks/useApiResource";
+import { formatBatchLabel } from "../../../utils/batchLabel";
 import { PanelShell, StatTile } from "./PanelShell";
 
 export default function StudentProfilePanel() {
@@ -21,7 +22,16 @@ export default function StudentProfilePanel() {
           <StatTile label="Phone" value={data.parent_mobile_number || data.phone || "N/A"} />
           <StatTile label="Status" value={data.status || "N/A"} />
           <StatTile label="Current Course" value={data.current_course || "N/A"} />
-          <StatTile label="Current Batch" value={data.current_batch || "N/A"} />
+          <StatTile
+            label="Current Batch"
+            value={formatBatchLabel(
+              {
+                course_name: data.current_course,
+                batch_name: data.current_batch,
+              },
+              "N/A",
+            )}
+          />
           <StatTile label="Enrollment Date" value={data.enrollment_date || "N/A"} />
           <div className="sm:col-span-2 xl:col-span-3">
             <StatTile label="Address" value={data.address || "N/A"} detail={data.email || data.username || ""} />

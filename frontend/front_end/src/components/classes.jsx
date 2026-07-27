@@ -10,6 +10,7 @@ import {
   HiOutlineBookOpen,
 } from "react-icons/hi";
 import instance from "../api/axiosInstance";
+import { formatBatchLabel } from "../utils/batchLabel";
 
 function Classes() {
   const [classes, setClasses] = useState(null);
@@ -223,7 +224,7 @@ function Classes() {
             key={classItem.id}
           >
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">{classItem.name}</h2>
+              <h2 className="text-xl font-semibold">{formatBatchLabel(classItem)}</h2>
               <Link to={`${classItem.id}`}>
                 <button
                   // onClick={() => setEditClassId(classItem.id)}

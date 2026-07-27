@@ -5,6 +5,7 @@ import DataTable from "./shared/DataTable";
 import PageHeader from "./shared/PageHeader";
 import StatCard from "./shared/StatCard";
 import { formatApiError } from "../utils/apiErrors";
+import { formatBatchLabel } from "../utils/batchLabel";
 
 const emptyForm = {
   username: "",
@@ -291,7 +292,7 @@ export default function Teachers() {
     { key: "phone_number", label: "Phone" },
     { key: "department", label: "Department" },
     { key: "subject", label: "Subject" },
-    { key: "classes", label: "Batches", accessor: (row) => row.classes?.map((item) => item.name).join(", ") || "-" },
+    { key: "classes", label: "Batches", accessor: (row) => row.classes?.map((item) => formatBatchLabel(item)).join(", ") || "-" },
     { key: "status", label: "Status", accessor: accountStatus, render: (row) => statusBadge(accountStatus(row)) },
   ];
 

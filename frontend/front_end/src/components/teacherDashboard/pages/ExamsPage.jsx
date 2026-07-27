@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { GraduationCap, Plus, Printer, Send } from "lucide-react";
 import instance from "../../../api/axiosInstance";
 import { formatApiError } from "../../../utils/apiErrors";
+import { formatBatchLabel } from "../../../utils/batchLabel";
 import TeacherPageShell from "./TeacherPageShell";
 import { EmptyState, ErrorState, LoadingSkeleton, Panel, SearchBox, StatTile, Toast } from "./TeacherUi";
 import { buttonClass, formatDate, inputClass, normalizeList, statusBadge, todayValue } from "./teacherUtils.jsx";
@@ -101,7 +102,7 @@ export default function TeacherExamsPage() {
         th,td{border:1px solid #cbd5e1;padding:8px;text-align:left}
         th{background:#f1f5f9}
       </style></head><body>
-      <h1>${exam.title}</h1><p>${exam.batch_name || ""} / ${formatDate(exam.assessment_date)}</p>
+      <h1>${exam.title}</h1><p>${formatBatchLabel(exam, "")} / ${formatDate(exam.assessment_date)}</p>
       <table><thead><tr><th>#</th><th>Student</th><th>Marks</th><th>Percentage</th><th>Grade</th><th>Status</th></tr></thead>
       <tbody>${rows.map((row, index) => `<tr><td>${index + 1}</td><td>${row.student_name}</td><td>${row.marks_obtained}</td><td>${row.percentage}%</td><td>${row.grade}</td><td>${row.is_passed ? "Pass" : "Fail"}</td></tr>`).join("")}</tbody></table>
       </body></html>`;
@@ -135,7 +136,7 @@ export default function TeacherExamsPage() {
                 <textarea className={inputClass()} rows={3} placeholder="Exam description" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
                 <div className="grid gap-3 sm:grid-cols-2">
                   <select required className={inputClass()} value={form.batch} onChange={(event) => setForm({ ...form, batch: event.target.value })}>
-                    {classes.map((item) => <option key={item.id} value={item.id}>{item.course_name ? `${item.course_name} / ` : ""}{item.name}</option>)}
+                    {classes.map((item) => <option key={item.id} value={item.id}>{formatBatchLabel(item)}</option>)}
                   </select>
                   <input required type="date" className={inputClass()} value={form.assessment_date} onChange={(event) => setForm({ ...form, assessment_date: event.target.value })} />
                   <input required type="number" min="1" className={inputClass()} value={form.maximum_marks} onChange={(event) => setForm({ ...form, maximum_marks: event.target.value })} />
@@ -163,7 +164,7 @@ export default function TeacherExamsPage() {
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <p className="font-semibold text-slate-950">{exam.title}</p>
-                          <p className="text-sm text-slate-500">{exam.batch_name || "-"} / {formatDate(exam.assessment_date)} / {exam.results?.length || 0} results</p>
+                          <p className="text-sm text-slate-500">{formatBatchLabel(exam)} / {formatDate(exam.assessment_date)} / {exam.results?.length || 0} results</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {statusBadge(exam.status)}

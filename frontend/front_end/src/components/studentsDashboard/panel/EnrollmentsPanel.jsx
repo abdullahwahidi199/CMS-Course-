@@ -1,4 +1,5 @@
 import { useApiResource } from "../../../hooks/useApiResource";
+import { formatBatchLabel } from "../../../utils/batchLabel";
 import { EmptyState, PanelShell } from "./PanelShell";
 
 function EnrollmentList({ rows }) {
@@ -10,7 +11,7 @@ function EnrollmentList({ rows }) {
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="font-semibold text-gray-900">{row.course_name}</p>
-              <p className="text-sm text-gray-500">{row.batch_name}</p>
+              <p className="text-sm text-gray-500">{formatBatchLabel(row)}</p>
             </div>
             <span className="shrink-0 rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">{row.status}</span>
           </div>

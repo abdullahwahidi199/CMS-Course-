@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Award, BarChart3, ClipboardCheck, Plus, Save, Send } from "lucide-react";
 import instance from "../../../api/axiosInstance";
 import { formatApiError } from "../../../utils/apiErrors";
+import { formatBatchLabel } from "../../../utils/batchLabel";
 import TeacherPageShell from "./TeacherPageShell";
 import { EmptyState, ErrorState, LoadingSkeleton, Panel, SearchBox, StatTile, Toast } from "./TeacherUi";
 import { buttonClass, formatDate, inputClass, normalizeList, statusBadge, todayValue } from "./teacherUtils.jsx";
@@ -183,7 +184,7 @@ export default function TeacherAssessmentsPage() {
                 <textarea className={inputClass()} rows={3} placeholder="Description" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
                 <div className="grid gap-3 sm:grid-cols-2">
                   <select required className={inputClass()} value={form.batch} onChange={(event) => setForm({ ...form, batch: event.target.value })}>
-                    {classes.map((item) => <option key={item.id} value={item.id}>{item.course_name ? `${item.course_name} / ` : ""}{item.name}</option>)}
+                    {classes.map((item) => <option key={item.id} value={item.id}>{formatBatchLabel(item)}</option>)}
                   </select>
                   <select className={inputClass()} value={form.assessment_type} onChange={(event) => setForm({ ...form, assessment_type: event.target.value })}>
                     {assessmentTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -222,7 +223,7 @@ export default function TeacherAssessmentsPage() {
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <p className="font-semibold text-slate-950">{item.title}</p>
-                          <p className="text-sm text-slate-500">{item.batch_name || "-"} / {item.assessment_type} / {formatDate(item.assessment_date)}</p>
+                          <p className="text-sm text-slate-500">{formatBatchLabel(item)} / {item.assessment_type} / {formatDate(item.assessment_date)}</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {statusBadge(item.status)}
@@ -239,7 +240,7 @@ export default function TeacherAssessmentsPage() {
             </Panel>
           </div>
 
-          <Panel title={selected ? `Grade: ${selected.title}` : "Gradebook"} description={selected ? `${selected.batch_name} / Maximum ${selected.maximum_marks} / Passing ${selected.passing_marks}` : "Select an assessment to enter marks."}>
+          <Panel title={selected ? `Grade: ${selected.title}` : "Gradebook"} description={selected ? `${formatBatchLabel(selected)} / Maximum ${selected.maximum_marks} / Passing ${selected.passing_marks}` : "Select an assessment to enter marks."}>
             {selected ? (
               <>
                 <div className="overflow-x-auto">

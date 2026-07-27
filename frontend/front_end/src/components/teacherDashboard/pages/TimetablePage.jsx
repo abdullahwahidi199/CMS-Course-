@@ -1,36 +1,32 @@
 import { useMemo, useState } from "react";
 import { CalendarDays, Clock, GraduationCap, List } from "lucide-react";
 import { useApiResource } from "../../../hooks/useApiResource";
+import { formatBatchLabel } from "../../../utils/batchLabel";
 import TeacherPageShell from "./TeacherPageShell";
 import { EmptyState, ErrorState, LoadingSkeleton, Panel, StatTile } from "./TeacherUi";
 import { formatDate, formatTime, normalizeList, todayValue } from "./teacherUtils.jsx";
 
-const days = ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+const weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const teachingDays = ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"];
+
+function parseDateOnly(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const [year, month, day] = String(value).split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+}
 
 function weekdayName(value) {
   if (!value) return "Unscheduled";
-  const date = new Date(value);
+  const date = parseDateOnly(value);
+  if (!date) return "Unscheduled";
   if (Number.isNaN(date.getTime())) return "Unscheduled";
-  return days[date.getDay()];
+  return weekdayNames[date.getDay()];
 }
 
-function dateValue(date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function dateForWeekday(selectedDate, dayName) {
-  const selected = new Date(selectedDate);
-  const targetIndex = days.indexOf(dayName);
-  const selectedIndex = days.indexOf(weekdayName(selectedDate));
-  selected.setDate(selected.getDate() + targetIndex - selectedIndex);
-  return dateValue(selected);
-}
-
-function classIsActiveOn(item, value) {
-  if (!value) return true;
-  const start = item.startDate || value;
-  const end = item.endDate || value;
-  return start <= value && value <= end;
+function isActiveBatch(item) {
+  return item.is_active !== false && item.is_archived !== true;
 }
 
 function ScheduleCard({ item }) {
@@ -38,7 +34,7 @@ function ScheduleCard({ item }) {
     <article className="rounded-md border border-slate-200 p-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-semibold text-slate-950">{item.course_name ? `${item.course_name} / ` : ""}{item.name}</p>
+          <p className="font-semibold text-slate-950">{formatBatchLabel(item)}</p>
           <p className="mt-1 text-sm text-slate-500">{formatTime(item.start_time)} - {formatTime(item.end_time)}</p>
         </div>
         <Clock size={18} className="text-cyan-700" />
@@ -54,18 +50,19 @@ export default function TeacherTimetablePage() {
   const [view, setView] = useState("daily");
   const [selectedDate, setSelectedDate] = useState(todayValue());
   const classRows = normalizeList(classes.data).sort((a, b) => String(a.start_time || "").localeCompare(String(b.start_time || "")));
+  const activeClassRows = classRows.filter(isActiveBatch);
   const examRows = normalizeList(assessments.data).filter((item) => item.assessment_type === "final_exam");
   const selectedDay = weekdayName(selectedDate);
-  const dailyRows = classRows.filter((item) => classIsActiveOn(item, selectedDate));
+  const isFriday = selectedDay === "Friday";
+  const dailyRows = isFriday ? [] : activeClassRows;
 
   const byDay = useMemo(() => {
-    const grouped = Object.fromEntries(days.map((day) => [day, []]));
-    days.forEach((day) => {
-      const dayDate = dateForWeekday(selectedDate, day);
-      grouped[day] = classRows.filter((item) => classIsActiveOn(item, dayDate));
+    const grouped = Object.fromEntries(teachingDays.map((day) => [day, []]));
+    teachingDays.forEach((day) => {
+      grouped[day] = activeClassRows;
     });
     return grouped;
-  }, [classRows, selectedDate]);
+  }, [activeClassRows]);
 
   const loading = classes.loading || assessments.loading;
   const error = classes.error || assessments.error;
@@ -78,10 +75,10 @@ export default function TeacherTimetablePage() {
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatTile icon={CalendarDays} label="Weekly Classes" value={classRows.length} helper="Assigned schedule" />
-            <StatTile icon={Clock} label="Today" value={dailyRows.length} helper={selectedDay} tone="emerald" />
+            <StatTile icon={CalendarDays} label="Weekly Classes" value={activeClassRows.length} helper="Assigned active batches" />
+            <StatTile icon={Clock} label="Today" value={dailyRows.length} helper={isFriday ? "Friday off" : selectedDay} tone="emerald" />
             <StatTile icon={GraduationCap} label="Exam Schedules" value={examRows.length} helper="Final exams" tone="amber" />
-            <StatTile icon={List} label="Upcoming" value={classRows.filter((item) => item.endDate >= todayValue()).length} helper="Active classes" tone="violet" />
+            <StatTile icon={List} label="Upcoming" value={activeClassRows.length} helper="Active classes" tone="violet" />
           </div>
 
           <Panel title="Calendar Controls">
@@ -98,24 +95,30 @@ export default function TeacherTimetablePage() {
           </Panel>
 
           {view === "daily" ? (
-            <Panel title={`${selectedDay} Schedule`} description="Classes for the selected day.">
-              {dailyRows.length ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{dailyRows.map((item) => <ScheduleCard key={item.id} item={item} />)}</div> : <EmptyState title="No classes for this day" description="Select another day or check weekly view." />}
+            <Panel title={isFriday ? "Friday Off" : `${selectedDay} Schedule`} description={isFriday ? "Friday is kept clear for Afghanistan's weekly off day." : "Active assigned batches for the selected teaching day."}>
+              {dailyRows.length ? (
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {dailyRows.map((item) => <ScheduleCard key={item.id} item={item} />)}
+                </div>
+              ) : (
+                <EmptyState title={isFriday ? "Friday is off" : "No active batches"} description={isFriday ? "No regular classes are shown on Friday." : "Active assigned batches will appear here."} />
+              )}
             </Panel>
           ) : null}
 
           {view === "weekly" ? (
-            <div className="grid gap-4 xl:grid-cols-7">
-              {days.map((day) => (
+            <div className="grid gap-4 xl:grid-cols-6">
+              {teachingDays.map((day) => (
                 <Panel key={day} title={day} className="min-h-48">
-                  {byDay[day]?.length ? <div className="space-y-3">{byDay[day].map((item) => <ScheduleCard key={item.id} item={item} />)}</div> : <p className="text-sm text-slate-500">No classes</p>}
+                  {byDay[day]?.length ? <div className="space-y-3">{byDay[day].map((item) => <ScheduleCard key={`${day}-${item.id}`} item={item} />)}</div> : <p className="text-sm text-slate-500">No active batches</p>}
                 </Panel>
               ))}
             </div>
           ) : null}
 
           {view === "agenda" ? (
-            <Panel title="Agenda" description="Upcoming classes sorted by time.">
-              {classRows.length ? <div className="space-y-3">{classRows.map((item) => <ScheduleCard key={item.id} item={item} />)}</div> : <EmptyState title="No agenda entries" description="Assigned classes will appear here." />}
+            <Panel title="Agenda" description="Active assigned batches sorted by time.">
+              {activeClassRows.length ? <div className="space-y-3">{activeClassRows.map((item) => <ScheduleCard key={item.id} item={item} />)}</div> : <EmptyState title="No agenda entries" description="Assigned active batches will appear here." />}
             </Panel>
           ) : null}
 
@@ -126,7 +129,7 @@ export default function TeacherTimetablePage() {
                   {examRows.map((exam) => (
                     <article key={exam.id} className="rounded-md border border-slate-200 p-3">
                       <p className="font-semibold text-slate-950">{exam.title}</p>
-                      <p className="mt-1 text-sm text-slate-500">{exam.batch_name || "-"} / {formatDate(exam.assessment_date)}</p>
+                      <p className="mt-1 text-sm text-slate-500">{formatBatchLabel(exam)} / {formatDate(exam.assessment_date)}</p>
                     </article>
                   ))}
                 </div>

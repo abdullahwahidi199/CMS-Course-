@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Bell, BookOpen, CalendarCheck, ClipboardCheck, CreditCard, FileText, GraduationCap } from "lucide-react";
 import { AuthContext } from "../../AuthProvider";
 import { useApiResource } from "../../hooks/useApiResource";
+import { formatBatchLabel } from "../../utils/batchLabel";
 import { EmptyState } from "./panel/PanelShell";
 
 function money(value) {
@@ -59,7 +60,13 @@ export default function Homepage() {
             <p className="text-sm text-cyan-100">{greeting()}</p>
             <h2 className="mt-1 text-2xl font-semibold sm:text-3xl">{name}</h2>
             <p className="mt-2 text-sm text-cyan-100">
-              {profile.data?.current_course || "Current course"} - {profile.data?.current_batch || "Current batch"}
+              {formatBatchLabel(
+                {
+                  course_name: profile.data?.current_course,
+                  batch_name: profile.data?.current_batch,
+                },
+                "Current course / Current batch",
+              )}
             </p>
           </div>
           <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/15 text-2xl font-bold">
