@@ -131,12 +131,23 @@ export default function BillingPage() {
   const [tenant, setTenant] = useState(null);
   const invoiceRows = invoices.results;
   const paymentRows = payments.results;
-  const selectedInvoice = invoiceRows.find(
+  const paymentInvoices = useApiResource("/v1/invoices/", { immediate: false });
+  const paymentSearch = paymentFilters.student.trim();
+  const paymentInvoiceParams = useMemo(() => {
+    const params = { payable: "1", ordering: "student__name" };
+    if (paymentFilters.batch) params.batch = paymentFilters.batch;
+    if (paymentSearch) params.search = paymentSearch;
+    return params;
+  }, [paymentFilters.batch, paymentSearch]);
+  const paymentLookupRows = paymentInvoices.data
+    ? paymentInvoices.results
+    : invoiceRows;
+  const selectedInvoice = paymentInvoices.results.find(
     (row) => String(row.id) === String(paymentForm.invoice),
-  );
+  ) || invoiceRows.find((row) => String(row.id) === String(paymentForm.invoice));
   const paymentInvoiceRows = useMemo(() => {
-    const studentQuery = paymentFilters.student.trim().toLowerCase();
-    return invoiceRows.filter((row) => {
+    const studentQuery = paymentSearch.toLowerCase();
+    return paymentLookupRows.filter((row) => {
       const isPayable =
         Number(row.balance || 0) > 0 && row.status !== "cancelled";
       const matchesBatch =
@@ -147,6 +158,7 @@ export default function BillingPage() {
           row.student_name,
           row.student_role_number,
           row.student_number_display,
+          row.student_number,
           row.student,
           row.invoice_number,
         ]
@@ -155,7 +167,7 @@ export default function BillingPage() {
           .includes(studentQuery);
       return isPayable && matchesBatch && matchesStudent;
     });
-  }, [invoiceRows, paymentFilters]);
+  }, [paymentLookupRows, paymentFilters.batch, paymentSearch]);
 
   const localSummary = useMemo(() => {
     const expected = invoiceRows.reduce(
@@ -181,6 +193,7 @@ export default function BillingPage() {
     await Promise.all([
       invoices.refetch(),
       payments.refetch(),
+      paymentInvoices.refetch(paymentInvoiceParams),
       ledger.refetch(),
       feePlans.refetch(),
       billingProfiles.refetch(),
@@ -279,6 +292,13 @@ export default function BillingPage() {
   useEffect(() => {
     getTenant();
   }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      paymentInvoices.refetch(paymentInvoiceParams).catch(() => {});
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [paymentInvoices.refetch, paymentInvoiceParams]);
 
   useEffect(() => {
     const period =
@@ -590,7 +610,7 @@ export default function BillingPage() {
                     discount_amount: "",
                     discount_notes: "",
                     amount_paid:
-                      invoiceRows.find(
+                      paymentInvoiceRows.find(
                         (row) => String(row.id) === e.target.value,
                       )?.balance || "",
                   })

@@ -382,11 +382,25 @@ class InvoiceViewSet(TenantScopedViewSet):
     serializer_class = InvoiceSerializer
     queryset = Invoice.objects.select_related("tenant", "enrollment", "student", "course", "batch", "created_by").prefetch_related("payments")
     search_fields = ["invoice_number", "student__name", "student__role_number", "course__name", "batch__name"]
-    ordering_fields = ["year", "month", "billing_year", "billing_month", "due_date", "final_amount", "balance", "created_at"]
+    ordering_fields = ["year", "month", "billing_year", "billing_month", "due_date", "final_amount", "balance", "created_at", "student__name"]
     filter_fields = ["student", "enrollment", "course", "batch", "month", "year", "billing_month", "billing_year", "status"]
+
+    def apply_search(self, queryset):
+        search = self.request.query_params.get("search")
+        if not search:
+            return queryset
+        query = Q()
+        for field in self.search_fields:
+            query |= Q(**{f"{field}__icontains": search})
+        if search.isdigit():
+            query |= Q(student_id=int(search)) | Q(student__student_number=int(search))
+        return queryset.filter(query)
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        payable = self.request.query_params.get("payable")
+        if str(payable).lower() in ["1", "true", "yes"]:
+            queryset = queryset.exclude(status=Invoice.Status.CANCELLED).filter(balance__gt=0)
         user = self.request.user
         if user.role_id and user.role.slug == "student" and hasattr(user, "student_profile"):
             queryset = queryset.filter(student=user.student_profile)

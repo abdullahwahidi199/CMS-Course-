@@ -256,6 +256,9 @@ class PaymentSerializer(CalendarModelSerializer):
 class InvoiceSerializer(CalendarModelSerializer):
     calendar_module = "invoices"
     student_name = serializers.CharField(source="student.name", read_only=True)
+    student_role_number = serializers.CharField(source="student.role_number", read_only=True)
+    student_number = serializers.ReadOnlyField(source="student.student_number")
+    student_number_display = serializers.CharField(source="student.formatted_student_number", read_only=True)
     course_name = serializers.CharField(source="course.name", read_only=True)
     batch_name = serializers.CharField(source="batch.name", read_only=True)
     enrollment_label = serializers.SerializerMethodField()
