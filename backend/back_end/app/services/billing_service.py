@@ -151,6 +151,12 @@ def period_start_date(month, year, period_calendar=None):
     return date(year, month, 1)
 
 
+def period_end_date(month, year, period_calendar=None):
+    if period_calendar == CALENDAR_SHAMSI:
+        return to_gregorian(year, month, shamsi_month_length(year, month))
+    return date(year, month, monthrange(year, month)[1])
+
+
 def due_date_for(profile, month, year, due_date=None, period_calendar=None):
     if due_date:
         return due_date
@@ -287,10 +293,10 @@ def generate_invoice_for_profile(*, profile, month, year, user=None, due_date=No
     if profile.billing_status != EnrollmentBillingProfile.Status.ACTIVE:
         return None, False
     period_start = period_start_date(month, year, period_calendar)
-    period_key = (period_start.year, period_start.month)
-    if profile.billing_start_date and (profile.billing_start_date.year, profile.billing_start_date.month) > period_key:
+    period_end = period_end_date(month, year, period_calendar)
+    if profile.billing_start_date and profile.billing_start_date > period_end:
         return None, False
-    if profile.billing_end_date and (profile.billing_end_date.year, profile.billing_end_date.month) < period_key:
+    if profile.billing_end_date and profile.billing_end_date < period_start:
         return None, False
     if should_skip_invoice_for_cycle(profile, month, year):
         return None, False
@@ -365,15 +371,18 @@ def generate_invoice_for_profile(*, profile, month, year, user=None, due_date=No
 
 @transaction.atomic
 def generate_monthly_invoices(*, tenant, month, year, due_date=None, user=None, course=None, batch=None, student=None, enrollment=None, period_calendar=None):
+    def value_id(value):
+        return getattr(value, "pk", value)
+
     filters = {"tenant": tenant, "status": Enrollment.Status.ACTIVE, "is_archived": False}
     if course:
-        filters["course_id"] = course
+        filters["course_id"] = value_id(course)
     if batch:
-        filters["batch_id"] = batch
+        filters["batch_id"] = value_id(batch)
     if student:
-        filters["student_id"] = student
+        filters["student_id"] = value_id(student)
     if enrollment:
-        filters["id"] = enrollment
+        filters["id"] = value_id(enrollment)
 
     enrollments = Enrollment.objects.filter(**filters).select_related(
         "billing_profile__fee_plan", "student", "course", "batch"

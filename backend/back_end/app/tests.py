@@ -76,7 +76,13 @@ class EnterpriseServiceTests(TestCase):
             parent_mobile_number="456",
             address="Address",
         )
-        self.enrollment = Enrollment.objects.create(tenant=self.tenant, student=self.student, course=self.course, batch=self.batch)
+        self.enrollment = Enrollment.objects.create(
+            tenant=self.tenant,
+            student=self.student,
+            course=self.course,
+            batch=self.batch,
+            enrollment_date=date(2026, 1, 1),
+        )
 
     def test_assessment_result_calculates_percentage_grade_and_pass_status(self):
         assessment = Assessment.objects.create(
@@ -275,6 +281,67 @@ class EnterpriseServiceTests(TestCase):
         self.assertEqual(invoices[0].billing_year, 1405)
         self.assertEqual(invoices[0].due_date, to_gregorian(1405, 5, 10))
         self.assertEqual(invoices[0].balance, Decimal("700.00"))
+
+    def test_shamsi_generation_includes_enrollment_started_inside_period(self):
+        self.enrollment.enrollment_date = date(2026, 8, 2)
+        self.enrollment.save(update_fields=["enrollment_date"])
+        FeePlan.objects.create(
+            tenant=self.tenant,
+            course=self.course,
+            batch=self.batch,
+            monthly_fee=Decimal("700"),
+            billing_cycle=FeePlan.BillingCycle.MONTHLY,
+            currency="AFN",
+            created_by=self.admin,
+        )
+
+        invoices = generate_monthly_invoices(
+            tenant=self.tenant,
+            month=5,
+            year=1405,
+            user=self.admin,
+            batch=self.batch.id,
+            period_calendar=CALENDAR_SHAMSI,
+        )
+
+        self.assertEqual(len(invoices), 1)
+        self.assertEqual(invoices[0].enrollment, self.enrollment)
+        self.assertEqual(invoices[0].billing_month, 5)
+        self.assertEqual(invoices[0].billing_year, 1405)
+
+    def test_invoice_generation_uses_latest_active_batch_fee_plan(self):
+        FeePlan.objects.create(
+            tenant=self.tenant,
+            course=self.course,
+            batch=self.batch,
+            monthly_fee=Decimal("500"),
+            billing_cycle=FeePlan.BillingCycle.MONTHLY,
+            currency="AFN",
+            created_by=self.admin,
+        )
+        latest_plan = FeePlan.objects.create(
+            tenant=self.tenant,
+            course=self.course,
+            batch=self.batch,
+            monthly_fee=Decimal("750"),
+            billing_cycle=FeePlan.BillingCycle.MONTHLY,
+            currency="AFN",
+            created_by=self.admin,
+        )
+
+        invoices = generate_monthly_invoices(
+            tenant=self.tenant,
+            month=7,
+            year=2026,
+            due_date=date(2026, 7, 20),
+            user=self.admin,
+            batch=self.batch.id,
+        )
+        self.enrollment.billing_profile.refresh_from_db()
+
+        self.assertEqual(len(invoices), 1)
+        self.assertEqual(invoices[0].monthly_fee, Decimal("750.00"))
+        self.assertEqual(self.enrollment.billing_profile.fee_plan, latest_plan)
 
     def test_course_level_monthly_fee_generates_for_all_active_enrollments_in_shamsi_period(self):
         second_user = User.objects.create_user(username="student2", password="pass", role=self.student_role, tenant=self.tenant)

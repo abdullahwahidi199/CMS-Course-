@@ -239,7 +239,12 @@ export default function BillingPage() {
       if (generateForm.scope === "enrollment" && generateForm.enrollment)
         payload.enrollment = generateForm.enrollment;
       const created = await apiPost("/v1/invoices/generate-monthly/", payload);
-      setMessage(`${created.length || 0} invoices generated.`);
+      const generatedCount = created.length || 0;
+      setMessage(
+        generatedCount
+          ? `${generatedCount} invoices generated.`
+          : "0 new invoices generated. Existing invoices for the same students and period are not duplicated.",
+      );
       await refreshAll();
     } catch (error) {
       setMessage(
