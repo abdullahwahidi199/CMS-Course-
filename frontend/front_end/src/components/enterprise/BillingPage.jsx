@@ -3,7 +3,13 @@ import { Banknote, FileText, Plus, Receipt, RefreshCcw } from "lucide-react";
 import DataTable from "../shared/DataTable";
 import PageHeader from "../shared/PageHeader";
 import StatCard from "../shared/StatCard";
-import { apiCreate, apiPost, useApiResource } from "../../hooks/useApiResource";
+import {
+  apiCreate,
+  apiDelete,
+  apiPost,
+  apiUpdate,
+  useApiResource,
+} from "../../hooks/useApiResource";
 import instance from "../../api/axiosInstance";
 import ReceiptPrintModal from "../reciept";
 import CalendarDatePicker from "../shared/CalendarDatePicker";
@@ -34,6 +40,34 @@ function money(value) {
 
 function billingCycleLabel(value) {
   return value === "batch" ? "Batch / One-time" : "Monthly";
+}
+
+function feePlanFormFromRow(row) {
+  return {
+    ...initialPlan,
+    course: row.course ? String(row.course) : "",
+    batch: row.batch ? String(row.batch) : "",
+    billing_cycle: row.billing_cycle || initialPlan.billing_cycle,
+    monthly_fee: row.monthly_fee ?? "",
+    registration_fee: row.registration_fee ?? "0",
+    material_fee: row.material_fee ?? "0",
+    exam_fee: row.exam_fee ?? "0",
+    discount_allowed: row.discount_allowed ?? "0",
+    currency: row.currency || initialPlan.currency,
+    due_day: row.due_day ?? initialPlan.due_day,
+    late_fee_amount: row.late_fee_amount ?? "0",
+    grace_period_days: row.grace_period_days ?? "0",
+    is_active: Boolean(row.is_active),
+  };
+}
+
+function feePlanPayload(form) {
+  return {
+    ...form,
+    course: form.course || null,
+    batch: form.batch || null,
+    is_active: Boolean(form.is_active),
+  };
 }
 
 function Field({ label, children }) {
@@ -89,6 +123,7 @@ export default function BillingPage() {
   const invoiceCalendar = useCalendar("invoices");
   const [activeTab, setActiveTab] = useState("Invoices");
   const [planForm, setPlanForm] = useState(initialPlan);
+  const [editingPlanId, setEditingPlanId] = useState(null);
   const [generateForm, setGenerateForm] = useState({
     month: current.getMonth() + 1,
     year: current.getFullYear(),
@@ -118,20 +153,25 @@ export default function BillingPage() {
     data: null,
   });
 
-  const invoices = useApiResource("/v1/invoices/");
-  const payments = useApiResource("/v1/payments/");
-  const ledger = useApiResource("/v1/student-ledger/");
-  const feePlans = useApiResource("/v1/fee-plans/");
-  const billingProfiles = useApiResource("/v1/enrollment-billing-profiles/");
+  const invoices = useApiResource("/v1/invoices/", { fetchAllPages: true });
+  const payments = useApiResource("/v1/payments/", { fetchAllPages: true });
+  const ledger = useApiResource("/v1/student-ledger/", { fetchAllPages: true });
+  const feePlans = useApiResource("/v1/fee-plans/", { fetchAllPages: true });
+  const billingProfiles = useApiResource("/v1/enrollment-billing-profiles/", {
+    fetchAllPages: true,
+  });
   const summary = useApiResource("/v1/invoices/revenue-summary/");
-  const courses = useApiResource("/courses/");
-  const batches = useApiResource("/classes/");
-  const enrollments = useApiResource("/enrollments/");
+  const courses = useApiResource("/courses/", { fetchAllPages: true });
+  const batches = useApiResource("/classes/", { fetchAllPages: true });
+  const enrollments = useApiResource("/enrollments/", { fetchAllPages: true });
 
   const [tenant, setTenant] = useState(null);
   const invoiceRows = invoices.results;
   const paymentRows = payments.results;
-  const paymentInvoices = useApiResource("/v1/invoices/", { immediate: false });
+  const paymentInvoices = useApiResource("/v1/invoices/", {
+    immediate: false,
+    fetchAllPages: true,
+  });
   const paymentSearch = paymentFilters.student.trim();
   const paymentInvoiceParams = useMemo(() => {
     const params = { payable: "1", ordering: "student__name" };
@@ -201,21 +241,57 @@ export default function BillingPage() {
     ]);
   };
 
+  const resetPlanForm = () => {
+    setPlanForm(initialPlan);
+    setEditingPlanId(null);
+  };
+
   const submitPlan = async (event) => {
     event.preventDefault();
     setSubmitting(true);
     setMessage("");
     try {
-      const payload = { ...planForm, batch: planForm.batch || null };
-      await apiCreate("/v1/fee-plans/", payload);
-      setPlanForm(initialPlan);
-      setMessage("Fee plan saved.");
+      const payload = feePlanPayload(planForm);
+      if (editingPlanId) {
+        await apiUpdate(`/v1/fee-plans/${editingPlanId}/`, payload);
+      } else {
+        await apiCreate("/v1/fee-plans/", payload);
+      }
+      resetPlanForm();
+      setMessage(editingPlanId ? "Fee plan updated." : "Fee plan saved.");
       await refreshAll();
     } catch (error) {
       setMessage(
         error.response?.data?.detail ||
           JSON.stringify(error.response?.data || {}) ||
           "Could not save fee plan.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const startEditingPlan = (row) => {
+    setEditingPlanId(row.id);
+    setPlanForm(feePlanFormFromRow(row));
+    setMessage("");
+    setActiveTab("Fee Plans");
+  };
+
+  const deletePlan = async (row) => {
+    if (!window.confirm(`Delete fee plan for ${row.course_name}?`)) return;
+    setSubmitting(true);
+    setMessage("");
+    try {
+      await apiDelete(`/v1/fee-plans/${row.id}/`);
+      if (String(editingPlanId) === String(row.id)) resetPlanForm();
+      setMessage("Fee plan deleted.");
+      await refreshAll();
+    } catch (error) {
+      setMessage(
+        error.response?.data?.detail ||
+          JSON.stringify(error.response?.data || {}) ||
+          "Could not delete fee plan.",
       );
     } finally {
       setSubmitting(false);
@@ -866,14 +942,18 @@ export default function BillingPage() {
 
       {activeTab === "Fee Plans" ? (
         <div className="space-y-6">
-          <Panel title="Create Fee Plan">
+          <Panel title={editingPlanId ? "Edit Fee Plan" : "Create Fee Plan"}>
             <form className="grid gap-4 md:grid-cols-4" onSubmit={submitPlan}>
               <Field label="Course">
                 <Select
                   required
                   value={planForm.course}
                   onChange={(e) =>
-                    setPlanForm({ ...planForm, course: e.target.value })
+                    setPlanForm({
+                      ...planForm,
+                      course: e.target.value,
+                      batch: "",
+                    })
                   }
                 >
                   <option value="">Select course</option>
@@ -1034,13 +1114,37 @@ export default function BillingPage() {
                   }
                 />
               </Field>
-              <div className="flex items-end">
+              <Field label="Status">
+                <div className="flex min-h-10 items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={planForm.is_active}
+                    onChange={(e) =>
+                      setPlanForm({
+                        ...planForm,
+                        is_active: e.target.checked,
+                      })
+                    }
+                  />
+                  <span className="text-gray-700">Active</span>
+                </div>
+              </Field>
+              <div className="flex items-end gap-2">
                 <button
                   disabled={submitting}
                   className="rounded-md bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                 >
-                  Save Plan
+                  {editingPlanId ? "Update Plan" : "Save Plan"}
                 </button>
+                {editingPlanId ? (
+                  <button
+                    type="button"
+                    className="rounded-md border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700"
+                    onClick={resetPlanForm}
+                  >
+                    Cancel
+                  </button>
+                ) : null}
               </div>
             </form>
           </Panel>
@@ -1051,6 +1155,10 @@ export default function BillingPage() {
             loading={feePlans.loading}
             error={feePlans.error}
             calendarModule="fees"
+            actions={(row) => [
+              { label: "Edit", onClick: () => startEditingPlan(row) },
+              { label: "Delete", onClick: () => deletePlan(row) },
+            ]}
           />
           <DataTable
             title="Enrollment Billing Profiles"

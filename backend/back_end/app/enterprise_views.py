@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.db.models import DateField, DateTimeField
 from django.db.models import Avg, Count, F, Q, Sum
+from django.db.models.deletion import ProtectedError
 from django.http import HttpResponse
 from django.utils import timezone
 from django.db.models.functions import TruncMonth
@@ -366,6 +367,15 @@ class FeePlanViewSet(TenantScopedViewSet):
     search_fields = ["course__name", "batch__name", "currency"]
     ordering_fields = ["monthly_fee", "currency", "created_at", "due_day"]
     filter_fields = ["course", "batch", "currency", "is_active"]
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {"detail": "This fee plan is assigned to enrollment billing profiles. Deactivate it instead of deleting it."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class EnrollmentBillingProfileViewSet(TenantScopedViewSet):

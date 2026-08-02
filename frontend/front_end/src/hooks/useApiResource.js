@@ -2,27 +2,51 @@ import { useCallback, useEffect, useState } from "react";
 import instance from "../api/axiosInstance";
 
 export function useApiResource(url, options = {}) {
-  const { immediate = true, params = {} } = options;
+  const { immediate = true, params = {}, fetchAllPages = false } = options;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(immediate);
   const [error, setError] = useState(null);
+  const paramsKey = JSON.stringify(params);
 
   const refetch = useCallback(async (overrideParams = {}) => {
     setLoading(true);
     setError(null);
     try {
+      const baseParams = JSON.parse(paramsKey || "{}");
       const response = await instance.get(url, {
-        params: { ...params, ...overrideParams },
+        params: { ...baseParams, ...overrideParams },
       });
-      setData(response.data);
-      return response.data;
+      let nextData = response.data;
+
+      if (fetchAllPages && nextData?.next && Array.isArray(nextData.results)) {
+        const results = [...nextData.results];
+        let nextUrl = nextData.next;
+
+        while (nextUrl) {
+          const nextResponse = await instance.get(nextUrl);
+          const pageData = nextResponse.data;
+          if (!Array.isArray(pageData.results)) break;
+          results.push(...pageData.results);
+          nextUrl = pageData.next;
+        }
+
+        nextData = {
+          ...nextData,
+          next: null,
+          previous: null,
+          results,
+        };
+      }
+
+      setData(nextData);
+      return nextData;
     } catch (err) {
       setError(err.response?.data?.detail || err.message || "Request failed");
       throw err;
     } finally {
       setLoading(false);
     }
-  }, [url, JSON.stringify(params)]);
+  }, [url, paramsKey, fetchAllPages]);
 
   useEffect(() => {
     if (immediate) {
