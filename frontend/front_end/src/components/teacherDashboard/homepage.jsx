@@ -30,7 +30,7 @@ function ListItem({ title, meta, to }) {
 export default function TeacherHomepage() {
   const { hasPermission } = usePermissions();
   const profile = useApiResource("/teacher/profile/");
-  const classes = useApiResource("/classes/", { immediate: hasPermission("batches.view") });
+  const classes = useApiResource("/classes/", { immediate: hasPermission("batches.view"), params: { summary: 1, active_only: 1 } });
   const dashboard = useApiResource("/v1/dashboards/teacher/");
   const assignments = useApiResource("/assignments/", { immediate: hasPermission("assessments.view") });
   const assessments = useApiResource("/v1/assessments/", { immediate: hasPermission("assessments.view") });

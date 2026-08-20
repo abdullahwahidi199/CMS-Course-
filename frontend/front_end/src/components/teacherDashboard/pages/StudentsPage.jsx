@@ -14,6 +14,9 @@ export default function TeacherStudentsPage() {
   const [students, setStudents] = useState([]);
   const [filters, setFilters] = useState({ search: "", classId: searchParams.get("class") || "" });
   const [selected, setSelected] = useState(null);
+  const [selectedDetail, setSelectedDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -22,11 +25,11 @@ export default function TeacherStudentsPage() {
       setLoading(true);
       setError("");
       try {
-        const classRes = await instance.get("/classes/");
+        const classRes = await instance.get("/classes/", { params: { summary: 1, active_only: 1 } });
         const assigned = Array.isArray(classRes.data) ? classRes.data : classRes.data?.results || [];
         const details = await Promise.all(
           assigned.map((item) =>
-            instance.get(`/students/by-class/${item.id}/`).then((res) => ({
+            instance.get(`/students/by-class/${item.id}/`, { params: { summary: 1 } }).then((res) => ({
               classInfo: item,
               students: Array.isArray(res.data) ? res.data : res.data?.results || [],
             })),
@@ -54,6 +57,41 @@ export default function TeacherStudentsPage() {
     load();
   }, []);
 
+  useEffect(() => {
+    if (!selected?.id) {
+      setSelectedDetail(null);
+      setDetailError("");
+      setDetailLoading(false);
+      return;
+    }
+
+    let active = true;
+    async function loadDetail() {
+      setDetailLoading(true);
+      setDetailError("");
+      setSelectedDetail(null);
+      try {
+        const response = await instance.get(`/students/${selected.id}/`);
+        if (active) {
+          setSelectedDetail(response.data);
+        }
+      } catch (err) {
+        if (active) {
+          setDetailError(formatApiError(err, "Could not load student details."));
+        }
+      } finally {
+        if (active) {
+          setDetailLoading(false);
+        }
+      }
+    }
+
+    loadDetail();
+    return () => {
+      active = false;
+    };
+  }, [selected?.id]);
+
   const visible = useMemo(() => {
     const term = filters.search.trim().toLowerCase();
     return students.filter((student) => {
@@ -66,6 +104,7 @@ export default function TeacherStudentsPage() {
   const averageAttendance = visible.length
     ? Math.round(visible.reduce((sum, student) => sum + attendancePercentage(student), 0) / visible.length)
     : 0;
+  const modalStudent = selected ? { ...selected, ...(selectedDetail || {}), class_name: selected.class_name, course_name: selected.course_name } : null;
 
   return (
     <TeacherPageShell title="Students" description="Read-only student records from your assigned classes. Admission data is protected from teacher edits.">
@@ -144,19 +183,36 @@ export default function TeacherStudentsPage() {
                 <p className="text-sm text-slate-500">{selected.course_name || "-"} / {selected.class_name || "-"}</p>
               </div>
             </div>
-            <div className="grid gap-3 text-sm text-slate-700">
-              <p><span className="font-semibold">Student ID:</span> {studentDisplayId(selected)}</p>
-              <p><span className="font-semibold">Guardian:</span> {selected.f_name || "-"}</p>
-              <p className="flex items-center gap-2"><Phone size={16} /> {selected.parent_mobile_number || selected.phone || "-"}</p>
-              <p className="flex items-center gap-2"><Mail size={16} /> {selected.email || "-"}</p>
-              <p><span className="font-semibold">Attendance:</span> {attendancePercentage(selected)}%</p>
-              <p><span className="font-semibold">Performance:</span> {performanceSummary(selected)}</p>
-              <p><span className="font-semibold">Address:</span> {selected.address || "-"}</p>
-            </div>
+            {detailLoading ? (
+              <StudentDetailSkeleton />
+            ) : (
+              <>
+                <ErrorState message={detailError} />
+                <div className="grid gap-3 text-sm text-slate-700">
+                  <p><span className="font-semibold">Student ID:</span> {studentDisplayId(modalStudent)}</p>
+                  <p><span className="font-semibold">Guardian:</span> {modalStudent.f_name || "-"}</p>
+                  <p className="flex items-center gap-2"><Phone size={16} /> {modalStudent.parent_mobile_number || modalStudent.phone || "-"}</p>
+                  <p className="flex items-center gap-2"><Mail size={16} /> {modalStudent.email || "-"}</p>
+                  <p><span className="font-semibold">Attendance:</span> {attendancePercentage(modalStudent)}%</p>
+                  <p><span className="font-semibold">Performance:</span> {performanceSummary(modalStudent)}</p>
+                  <p><span className="font-semibold">Address:</span> {modalStudent.address || "-"}</p>
+                </div>
+              </>
+            )}
             <button className="mt-5 rounded-md bg-cyan-700 px-4 py-2 text-sm font-semibold text-white" onClick={() => setSelected(null)}>Close</button>
           </div>
         </div>
       ) : null}
     </TeacherPageShell>
+  );
+}
+
+function StudentDetailSkeleton() {
+  return (
+    <div className="space-y-3" aria-label="Loading student details">
+      {Array.from({ length: 7 }).map((_, index) => (
+        <div key={index} className="h-5 animate-pulse rounded bg-slate-200" />
+      ))}
+    </div>
   );
 }

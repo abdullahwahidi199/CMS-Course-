@@ -17,6 +17,7 @@ from .services.admission_service import admit_student
 from .shamsi import CALENDAR_SHAMSI, to_gregorian
 from .models import (
     Assessment,
+    Attendance,
     Classes,
     Course,
     Enrollment,
@@ -24,6 +25,7 @@ from .models import (
     FeePlan,
     InventoryTransaction,
     Invoice,
+    Marks,
     PromotionHistory,
     PublicAnnouncement,
     PublicAnnouncementComment,
@@ -630,6 +632,144 @@ class EnterpriseServiceTests(TestCase):
 
         self.assertEqual(item.quantity, 4)
         self.assertEqual(item.status, "low_stock")
+
+
+class SummaryEndpointTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.tenant = Tenant.objects.create(name="Summary School")
+        self.admin_role = Role.objects.create(tenant=self.tenant, name="Admin", slug="admin")
+        self.teacher_role = Role.objects.create(tenant=self.tenant, name="Teacher", slug="teacher")
+        self.student_role = Role.objects.create(tenant=self.tenant, name="Student", slug="student")
+        self.admin = User.objects.create_user(username="summary-admin", password="pass", role=self.admin_role, tenant=self.tenant)
+        self.teacher_user = User.objects.create_user(username="summary-teacher", password="pass", role=self.teacher_role, tenant=self.tenant)
+        self.other_teacher_user = User.objects.create_user(username="other-summary-teacher", password="pass", role=self.teacher_role, tenant=self.tenant)
+        self.student_user = User.objects.create_user(username="summary-student", password="pass", role=self.student_role, tenant=self.tenant, phone="555")
+        seed_permissions_and_roles(self.tenant, self.admin)
+
+        self.teacher = Teachers.objects.create(
+            tenant=self.tenant,
+            user=self.teacher_user,
+            full_name="Summary Teacher",
+            phone_number="123",
+            email_address="teacher@example.com",
+            subject="Math",
+        )
+        self.other_teacher = Teachers.objects.create(
+            tenant=self.tenant,
+            user=self.other_teacher_user,
+            full_name="Other Teacher",
+            phone_number="999",
+            email_address="other@example.com",
+            subject="Science",
+        )
+        self.course = Course.objects.create(tenant=self.tenant, name="Math", code="MTH")
+        self.batch = Classes.objects.create(
+            tenant=self.tenant,
+            course=self.course,
+            name="Batch A",
+            subjects="Algebra",
+            startDate=date(2026, 1, 1),
+            endDate=date(2026, 12, 31),
+        )
+        self.batch.teachers.add(self.teacher)
+        self.other_batch = Classes.objects.create(
+            tenant=self.tenant,
+            course=self.course,
+            name="Batch B",
+            subjects="Geometry",
+            startDate=date(2026, 1, 1),
+            endDate=date(2026, 12, 31),
+        )
+        self.other_batch.teachers.add(self.other_teacher)
+        self.archived_batch = Classes.objects.create(
+            tenant=self.tenant,
+            course=self.course,
+            name="Archived Batch",
+            subjects="Calculus",
+            startDate=date(2026, 1, 1),
+            endDate=date(2026, 12, 31),
+            is_active=False,
+            is_archived=True,
+        )
+        self.archived_batch.teachers.add(self.teacher)
+
+        self.student = Students.objects.create(
+            tenant=self.tenant,
+            user=self.student_user,
+            name="Summary Student",
+            f_name="Summary Parent",
+            role_number="S-1",
+            parent_mobile_number="777",
+            address="Main Street",
+        )
+        self.enrollment = Enrollment.objects.create(
+            tenant=self.tenant,
+            student=self.student,
+            course=self.course,
+            batch=self.batch,
+            enrollment_date=date(2026, 1, 1),
+        )
+        Attendance.objects.create(
+            tenant=self.tenant,
+            enrollment=self.enrollment,
+            student=self.student,
+            class_fk=self.batch,
+            course=self.course,
+            teacher=self.teacher,
+            date=date(2026, 8, 1),
+            status=Attendance.Status.PRESENT,
+            is_present=True,
+        )
+        Attendance.objects.create(
+            tenant=self.tenant,
+            enrollment=self.enrollment,
+            student=self.student,
+            class_fk=self.batch,
+            course=self.course,
+            teacher=self.teacher,
+            date=date(2026, 8, 2),
+            status=Attendance.Status.ABSENT,
+            is_present=False,
+        )
+        Marks.objects.create(
+            tenant=self.tenant,
+            student=self.student,
+            marks_obtained=80,
+            total_marks=100,
+            className="Batch A",
+            exam_type="quiz",
+        )
+
+    def test_teacher_class_summary_is_scoped_and_counts_active_students(self):
+        self.client.force_authenticate(user=self.teacher_user)
+
+        response = self.client.get("/api/classes/?summary=1&active_only=1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["id"] for item in response.data], [self.batch.id])
+        self.assertEqual(response.data[0]["student_count"], 1)
+        self.assertEqual(response.data[0]["teachers_count"], 1)
+        self.assertEqual(response.data[0]["teachers_details"][0]["full_name"], "Summary Teacher")
+
+    def test_student_by_class_summary_returns_lightweight_metrics(self):
+        self.client.force_authenticate(user=self.teacher_user)
+
+        response = self.client.get(f"/api/students/by-class/{self.batch.id}/?summary=1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["student_number_display"], self.student.formatted_student_number)
+        self.assertEqual(response.data[0]["phone"], "555")
+        self.assertEqual(response.data[0]["attendance_percentage"], 50)
+        self.assertEqual(response.data[0]["performance_average"], 80.0)
+
+    def test_teacher_cannot_load_students_for_unassigned_class(self):
+        self.client.force_authenticate(user=self.teacher_user)
+
+        response = self.client.get(f"/api/students/by-class/{self.other_batch.id}/?summary=1")
+
+        self.assertEqual(response.status_code, 403)
 
 
 class PublicOnlinePageTests(TestCase):

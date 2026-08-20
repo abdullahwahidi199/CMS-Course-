@@ -181,7 +181,7 @@ export default function BatchManagementPage() {
     setError("");
     try {
       const [batchRes, courseRes, teacherRes, roomRes] = await Promise.all([
-        instance.get("/classes/"),
+        instance.get("/classes/", { params: { summary: 1 } }),
         instance.get("/courses/"),
         instance.get("/teachers/"),
         instance.get("/rooms/"),

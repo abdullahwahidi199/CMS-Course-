@@ -50,7 +50,7 @@ export default function Attendance() {
     try {
       const [courseRes, batchRes, teacherRes, sessionRes, dashboardRes] = await Promise.all([
         instance.get("/courses/"),
-        instance.get("/classes/"),
+        instance.get("/classes/", { params: { summary: 1, active_only: 1 } }),
         instance.get("/teachers/"),
         instance.get("/attendance-sessions/"),
         instance.get("/attendance-sessions/dashboard/"),

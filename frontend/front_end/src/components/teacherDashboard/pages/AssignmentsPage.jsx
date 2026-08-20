@@ -23,7 +23,10 @@ export default function TeacherAssignmentsPage() {
     setLoading(true);
     setError("");
     try {
-      const [classRes, assignmentRes] = await Promise.all([instance.get("/classes/"), instance.get("/assignments/")]);
+      const [classRes, assignmentRes] = await Promise.all([
+        instance.get("/classes/", { params: { summary: 1, active_only: 1 } }),
+        instance.get("/assignments/"),
+      ]);
       const classRows = normalizeList(classRes.data);
       setClasses(classRows);
       setAssignments(normalizeList(assignmentRes.data));

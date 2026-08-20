@@ -8,7 +8,7 @@ from django.db.models.functions import Coalesce
 from .models import Students,Teachers,Events,Classes,Attendance,AttendanceSession,Staff,Expenses,ExpenseCategory,Budget,RecurringExpense,RoomOfClass,Course,Enrollment,Role
 from .models import Assessment, AssessmentResult, Invoice, Notification, Payment, StudentLedgerEntry
 from .models import PromotionHistory
-from .serializers import AdmissionSerializer, PromotionCreateSerializer, PromotionHistorySerializer, StudentsSerializer,TeachersSerializer,EventSerializer,ClassesSerializer,AttendanceSerializer,AttendanceSessionSerializer,StaffSerializer,ExpensesSerializer,ExpenseCategorySerializer,BudgetSerializer,RecurringExpenseSerializer,RoomSerializer,CourseSerializer,EnrollmentSerializer
+from .serializers import AdmissionSerializer, PromotionCreateSerializer, PromotionHistorySerializer, StudentsSerializer,StudentsListSerializer,TeachersSerializer,EventSerializer,ClassesSerializer,ClassesListSerializer,AttendanceSerializer,AttendanceSessionSerializer,StaffSerializer,ExpensesSerializer,ExpenseCategorySerializer,BudgetSerializer,RecurringExpenseSerializer,RoomSerializer,CourseSerializer,EnrollmentSerializer
 from rest_framework.generics import RetrieveUpdateDestroyAPIView
 from rest_framework.views import APIView
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
@@ -530,9 +530,12 @@ class studentDetailsView(RetrieveUpdateDestroyAPIView):
     permission_classes = [HasRBACPermission]
     rbac_resource = "students"
     def get_queryset(self):
-        return Students.objects.filter(
+        queryset = Students.objects.filter(
             tenant=self.request.user.tenant
-        )
+        ).select_related("user").prefetch_related("marks", "attendances", "enrollments")
+        if is_teacher_user(self.request.user):
+            queryset = queryset.filter(enrollments__batch__teachers=self.request.user.teacher_profile).distinct()
+        return queryset
     serializer_class=StudentsSerializer
     lookup_field='id'
 
@@ -713,20 +716,36 @@ def classApi(request):
     if denied:
         return denied
     if request.method=='GET':
+        summary = request.query_params.get("summary") in ["1", "true", "yes"]
+        active_only = request.query_params.get("active_only") in ["1", "true", "yes"]
         classes = Classes.objects.filter(
     tenant=request.user.tenant
 ).select_related(
     "roomOfClass",
     "course"
-).prefetch_related(
+)
+        if active_only:
+            classes = classes.filter(is_active=True, is_archived=False)
+        if not summary:
+            classes = classes.prefetch_related(
     "teachers",
     "enrollments",
     "attendances",
     "assignments"
 )
+        else:
+            classes = classes.prefetch_related("teachers").annotate(
+                active_student_count=Count(
+                    "enrollments",
+                    filter=Q(enrollments__status=Enrollment.Status.ACTIVE),
+                    distinct=True,
+                ),
+                teachers_total=Count("teachers", distinct=True),
+            )
         if is_teacher_user(request.user):
             classes = classes.filter(teachers=request.user.teacher_profile)
-        serializer=ClassesSerializer(classes,many=True)
+        serializer_class = ClassesListSerializer if summary else ClassesSerializer
+        serializer=serializer_class(classes,many=True)
         return Response(serializer.data)
     if request.method=='POST':
         serializer=ClassesSerializer(data=request.data)
@@ -995,12 +1014,36 @@ class StudentByClassView(APIView):
         batch = get_object_or_404(Classes, id=class_id, tenant=request.user.tenant)
         if not user_can_access_class(request.user, batch):
             return Response({"detail": "You do not have permission to access this class."}, status=status.HTTP_403_FORBIDDEN)
+        summary = request.query_params.get("summary") in ["1", "true", "yes"]
         students = Students.objects.filter(
     tenant=request.user.tenant,
     enrollments__batch_id=class_id,
     enrollments__status=Enrollment.Status.ACTIVE
-).distinct()
-        serializer=StudentsSerializer(students,many=True)
+).select_related("user")
+        if summary:
+            students = students.annotate(
+            attendance_count=Count(
+                "attendances",
+                filter=~Q(attendances__status=Attendance.Status.HOLIDAY),
+                distinct=True,
+            ),
+            attended_count=Count(
+                "attendances",
+                filter=Q(attendances__status__in=[
+                    Attendance.Status.PRESENT,
+                    Attendance.Status.LATE,
+                    Attendance.Status.EXCUSED,
+                ]),
+                distinct=True,
+            ),
+            performance_average=Avg("marks__marks_obtained"),
+        )
+            serializer_class = StudentsListSerializer
+        else:
+            students = students.prefetch_related("marks", "attendances", "enrollments")
+            serializer_class = StudentsSerializer
+        students = students.distinct().order_by("name")
+        serializer=serializer_class(students,many=True)
         return Response(serializer.data)
         
 @api_view(['GET','POST'])

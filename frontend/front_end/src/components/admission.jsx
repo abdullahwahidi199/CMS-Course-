@@ -68,7 +68,7 @@ export default function Admission() {
         await Promise.all([
           instance.get("/students/"),
           instance.get("/courses/"),
-          instance.get("/classes/"),
+          instance.get("/classes/", { params: { summary: 1, active_only: 1 } }),
         ]);
       setStudents(normalizeList(studentsResponse.data));
       setCourses(normalizeList(coursesResponse.data));

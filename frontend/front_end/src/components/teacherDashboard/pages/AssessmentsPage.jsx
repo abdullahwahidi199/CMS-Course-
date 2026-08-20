@@ -53,7 +53,7 @@ export default function TeacherAssessmentsPage() {
     try {
       const [profileRes, classRes, assessmentRes] = await Promise.all([
         instance.get("/teacher/profile/"),
-        instance.get("/classes/"),
+        instance.get("/classes/", { params: { summary: 1, active_only: 1 } }),
         instance.get("/v1/assessments/"),
       ]);
       const classRows = normalizeList(classRes.data);

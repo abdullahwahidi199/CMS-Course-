@@ -8,7 +8,7 @@ import { EmptyState, ErrorState, LoadingSkeleton, Panel, SearchBox, StatTile } f
 import { formatDate, formatTime, inputClass, normalizeList } from "./teacherUtils.jsx";
 
 export default function TeacherClassesPage() {
-  const classes = useApiResource("/classes/");
+  const classes = useApiResource("/classes/", { params: { summary: 1 } });
   const [filters, setFilters] = useState({ search: "", course: "", status: "active" });
   const rows = normalizeList(classes.data);
   const courseOptions = [...new Set(rows.map((item) => item.course_name || item.subjects || item.name).filter(Boolean))];

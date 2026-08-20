@@ -34,7 +34,7 @@ export default function TeacherAttendancePage() {
     setError("");
     try {
       const [classRes, historyRes] = await Promise.all([
-        instance.get("/classes/"),
+        instance.get("/classes/", { params: { summary: 1, active_only: 1 } }),
         instance.get("/attendance-sessions/"),
       ]);
       const classRows = normalizeList(classRes.data);

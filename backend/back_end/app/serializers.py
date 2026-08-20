@@ -187,6 +187,47 @@ class ClassesMiniSerialiser(CalendarModelSerializer):
         fields=['id','name','course','course_name','startDate','endDate','roomOfClass','start_time','end_time','roomOfClass_details','capacity','is_active','is_archived']
 
 
+class ClassesListSerializer(CalendarModelSerializer):
+    calendar_module = "classes"
+    roomOfClass_details = RoomMiniSerializer(source="roomOfClass", read_only=True)
+    teachers = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
+    teachers_details = serializers.SerializerMethodField()
+    student_count = serializers.SerializerMethodField()
+    teachers_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Classes
+        fields = [
+            "id",
+            "name",
+            "course",
+            "course_name",
+            "subjects",
+            "teachers",
+            "teachers_details",
+            "startDate",
+            "endDate",
+            "student_count",
+            "teachers_count",
+            "roomOfClass",
+            "roomOfClass_details",
+            "start_time",
+            "end_time",
+            "capacity",
+            "is_active",
+            "is_archived",
+        ]
+
+    def get_teachers_details(self, obj):
+        return [{"id": teacher.id, "full_name": teacher.full_name} for teacher in obj.teachers.all()]
+
+    def get_teachers_count(self, obj):
+        return getattr(obj, "teachers_total", None) if getattr(obj, "teachers_total", None) is not None else obj.teachers.count()
+
+    def get_student_count(self, obj):
+        return getattr(obj, "active_student_count", None) if getattr(obj, "active_student_count", None) is not None else obj.enrollments.filter(status=Enrollment.Status.ACTIVE).count()
+
+
 class EnrollmentSerializer(CalendarModelSerializer):
     calendar_module = "admissions"
     student_name = serializers.CharField(source="student.name", read_only=True)
@@ -325,6 +366,39 @@ class StudentsSerializer(CalendarModelSerializer):
             phone=user_data.get("phone"),
             **validated_data,
         )
+
+
+class StudentsListSerializer(CalendarModelSerializer):
+    calendar_module = "students"
+    student_number_display = serializers.CharField(source="formatted_student_number", read_only=True)
+    phone = serializers.CharField(source="user.phone", read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True)
+    attendance_percentage = serializers.SerializerMethodField()
+    performance_average = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Students
+        fields = [
+            "id",
+            "name",
+            "role_number",
+            "parent_mobile_number",
+            "student_number",
+            "student_number_display",
+            "phone",
+            "email",
+            "attendance_percentage",
+            "performance_average",
+        ]
+
+    def get_attendance_percentage(self, obj):
+        total = getattr(obj, "attendance_count", 0) or 0
+        present = getattr(obj, "attended_count", 0) or 0
+        return round((present / total) * 100) if total else 0
+
+    def get_performance_average(self, obj):
+        average = getattr(obj, "performance_average", None)
+        return round(float(average), 1) if average is not None else None
 
 class TeachersSerializer(CalendarModelSerializer):
     calendar_module = "teachers"

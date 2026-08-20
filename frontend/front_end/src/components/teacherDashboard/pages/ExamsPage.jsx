@@ -24,7 +24,7 @@ export default function TeacherExamsPage() {
     try {
       const [profileRes, classRes, examRes] = await Promise.all([
         instance.get("/teacher/profile/"),
-        instance.get("/classes/"),
+        instance.get("/classes/", { params: { summary: 1, active_only: 1 } }),
         instance.get("/v1/assessments/", { params: { assessment_type: "final_exam" } }),
       ]);
       const classRows = normalizeList(classRes.data);

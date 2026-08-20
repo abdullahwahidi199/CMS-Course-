@@ -52,6 +52,9 @@ export function studentDisplayId(student) {
 }
 
 export function attendancePercentage(student) {
+  if (student?.attendance_percentage !== undefined && student?.attendance_percentage !== null) {
+    return Math.round(Number(student.attendance_percentage) || 0);
+  }
   const records = student?.attendances || [];
   const counted = records.filter((record) => record.status !== "holiday");
   if (!counted.length) return 0;
@@ -60,6 +63,13 @@ export function attendancePercentage(student) {
 }
 
 export function performanceSummary(student) {
+  if (student?.performance_average !== undefined && student?.performance_average !== null) {
+    const average = Number(student.performance_average);
+    if (!Number.isFinite(average)) return "No grades yet";
+    if (average >= 80) return `Strong / ${average.toFixed(1)}%`;
+    if (average >= 60) return `Steady / ${average.toFixed(1)}%`;
+    return `Needs support / ${average.toFixed(1)}%`;
+  }
   const results = student?.assessment_results || student?.marks || [];
   if (!results.length) return "No grades yet";
   const values = results
