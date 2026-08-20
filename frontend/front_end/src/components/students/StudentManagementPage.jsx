@@ -733,7 +733,7 @@ export default function StudentManagementPage() {
       try {
         const [studentsRes, batchesRes] = await Promise.all([
           instance.get("/students/", { params: filterParams(activeFilters) }),
-          instance.get("/classes/").catch(() => ({ data: [] })),
+          instance.get("/classes/", { params: { summary: 1 } }).catch(() => ({ data: [] })),
         ]);
         setStudents(normalizeList(studentsRes.data));
         setBatches(normalizeList(batchesRes.data));

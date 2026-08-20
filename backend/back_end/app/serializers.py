@@ -98,12 +98,36 @@ class AttendanceSerializer(CalendarModelSerializer):
         fields='__all__'
 
 
+class AttendanceRecordListSerializer(CalendarModelSerializer):
+    calendar_module = "attendance"
+    student_name = serializers.CharField(source="student.name", read_only=True)
+    student_number = serializers.CharField(source="student.formatted_student_number", read_only=True)
+    guardian_name = serializers.CharField(source="student.f_name", read_only=True)
+
+    class Meta:
+        model = Attendance
+        fields = [
+            "id",
+            "student_name",
+            "student_number",
+            "guardian_name",
+            "date",
+            "status",
+            "is_present",
+            "check_in_time",
+            "check_out_time",
+            "remarks",
+            "reason_for_absence",
+            "is_locked",
+        ]
+
+
 class AttendanceSessionSerializer(CalendarModelSerializer):
     calendar_module = "attendance"
     course_name = serializers.CharField(source="course.name", read_only=True)
     batch_name = serializers.CharField(source="batch.name", read_only=True)
     teacher_name = serializers.CharField(source="teacher.full_name", read_only=True)
-    records = AttendanceSerializer(many=True, read_only=True)
+    records = AttendanceRecordListSerializer(many=True, read_only=True)
     present_count = serializers.SerializerMethodField()
     absent_count = serializers.SerializerMethodField()
     late_count = serializers.SerializerMethodField()
@@ -133,6 +157,54 @@ class AttendanceSessionSerializer(CalendarModelSerializer):
     def get_attendance_percentage(self, obj):
         total = self._records(obj).exclude(status=Attendance.Status.HOLIDAY).count()
         attended = self._records(obj).filter(status__in=[Attendance.Status.PRESENT, Attendance.Status.LATE, Attendance.Status.EXCUSED]).count()
+        return round((attended / total) * 100, 2) if total else 0
+
+
+class AttendanceSessionListSerializer(CalendarModelSerializer):
+    calendar_module = "attendance"
+    course_name = serializers.CharField(source="course.name", read_only=True)
+    batch_name = serializers.CharField(source="batch.name", read_only=True)
+    teacher_name = serializers.CharField(source="teacher.full_name", read_only=True)
+    present_count = serializers.IntegerField(read_only=True)
+    absent_count = serializers.IntegerField(read_only=True)
+    late_count = serializers.IntegerField(read_only=True)
+    leave_count = serializers.IntegerField(read_only=True)
+    attendance_percentage = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AttendanceSession
+        fields = [
+            "id",
+            "course",
+            "course_name",
+            "batch",
+            "batch_name",
+            "teacher",
+            "teacher_name",
+            "date",
+            "start_time",
+            "end_time",
+            "session_topic",
+            "status",
+            "present_count",
+            "absent_count",
+            "late_count",
+            "leave_count",
+            "attendance_percentage",
+        ]
+
+    def get_attendance_percentage(self, obj):
+        total = (
+            getattr(obj, "present_count", 0)
+            + getattr(obj, "absent_count", 0)
+            + getattr(obj, "late_count", 0)
+            + getattr(obj, "leave_count", 0)
+        )
+        attended = (
+            getattr(obj, "present_count", 0)
+            + getattr(obj, "late_count", 0)
+            + getattr(obj, "excused_count", 0)
+        )
         return round((attended / total) * 100, 2) if total else 0
 
 
@@ -373,22 +445,53 @@ class StudentsListSerializer(CalendarModelSerializer):
     student_number_display = serializers.CharField(source="formatted_student_number", read_only=True)
     phone = serializers.CharField(source="user.phone", read_only=True)
     email = serializers.EmailField(source="user.email", read_only=True)
+    current_enrollments = serializers.SerializerMethodField()
     attendance_percentage = serializers.SerializerMethodField()
     performance_average = serializers.SerializerMethodField()
+    billing_total = serializers.SerializerMethodField()
+    billing_paid = serializers.SerializerMethodField()
+    billing_outstanding = serializers.SerializerMethodField()
+    billing_invoice_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Students
         fields = [
             "id",
             "name",
+            "f_name",
             "role_number",
             "parent_mobile_number",
             "student_number",
             "student_number_display",
+            "enrollment_date",
+            "is_active",
+            "is_archived",
             "phone",
             "email",
+            "current_enrollments",
             "attendance_percentage",
             "performance_average",
+            "billing_total",
+            "billing_paid",
+            "billing_outstanding",
+            "billing_invoice_count",
+        ]
+
+    def get_current_enrollments(self, obj):
+        enrollments = getattr(obj, "active_enrollments", None)
+        if enrollments is None:
+            enrollments = obj.enrollments.filter(status=Enrollment.Status.ACTIVE).select_related("course", "batch")
+        return [
+            {
+                "id": enrollment.id,
+                "course": enrollment.course_id,
+                "course_name": enrollment.course.name if enrollment.course_id else "",
+                "batch": enrollment.batch_id,
+                "batch_name": enrollment.batch.name if enrollment.batch_id else "",
+                "status": enrollment.status,
+                "enrollment_date": enrollment.enrollment_date,
+            }
+            for enrollment in enrollments
         ]
 
     def get_attendance_percentage(self, obj):
@@ -399,6 +502,18 @@ class StudentsListSerializer(CalendarModelSerializer):
     def get_performance_average(self, obj):
         average = getattr(obj, "performance_average", None)
         return round(float(average), 1) if average is not None else None
+
+    def get_billing_total(self, obj):
+        return getattr(obj, "billing_total", 0) or 0
+
+    def get_billing_paid(self, obj):
+        return getattr(obj, "billing_paid", 0) or 0
+
+    def get_billing_outstanding(self, obj):
+        return getattr(obj, "billing_outstanding", 0) or 0
+
+    def get_billing_invoice_count(self, obj):
+        return getattr(obj, "billing_invoice_count", 0) or 0
 
 class TeachersSerializer(CalendarModelSerializer):
     calendar_module = "teachers"

@@ -3,12 +3,12 @@ from django.shortcuts import render,get_object_or_404
 from django.http import HttpResponse
 from rest_framework.decorators import api_view,parser_classes
 from rest_framework.response import Response
-from django.db.models import DecimalField, Q, Value
+from django.db.models import DecimalField, Prefetch, Q, Value
 from django.db.models.functions import Coalesce
 from .models import Students,Teachers,Events,Classes,Attendance,AttendanceSession,Staff,Expenses,ExpenseCategory,Budget,RecurringExpense,RoomOfClass,Course,Enrollment,Role
 from .models import Assessment, AssessmentResult, Invoice, Notification, Payment, StudentLedgerEntry
 from .models import PromotionHistory
-from .serializers import AdmissionSerializer, PromotionCreateSerializer, PromotionHistorySerializer, StudentsSerializer,StudentsListSerializer,TeachersSerializer,EventSerializer,ClassesSerializer,ClassesListSerializer,AttendanceSerializer,AttendanceSessionSerializer,StaffSerializer,ExpensesSerializer,ExpenseCategorySerializer,BudgetSerializer,RecurringExpenseSerializer,RoomSerializer,CourseSerializer,EnrollmentSerializer
+from .serializers import AdmissionSerializer, PromotionCreateSerializer, PromotionHistorySerializer, StudentsSerializer,StudentsListSerializer,TeachersSerializer,EventSerializer,ClassesSerializer,ClassesListSerializer,AttendanceSerializer,AttendanceRecordListSerializer,AttendanceSessionSerializer,AttendanceSessionListSerializer,StaffSerializer,ExpensesSerializer,ExpenseCategorySerializer,BudgetSerializer,RecurringExpenseSerializer,RoomSerializer,CourseSerializer,EnrollmentSerializer
 from rest_framework.generics import RetrieveUpdateDestroyAPIView
 from rest_framework.views import APIView
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
@@ -508,13 +508,25 @@ def studentsApi(request):
         if max_outstanding:
             students = students.filter(billing_outstanding__lte=max_outstanding)
 
-        students = students.prefetch_related(
-            "marks",
-            "submissions",
-            "attendances",
-            "enrollments",
-        ).distinct()
-        serializer=StudentsSerializer(students,many=True)
+        active_enrollments = Enrollment.objects.filter(
+            status=Enrollment.Status.ACTIVE
+        ).select_related(
+            "course",
+            "batch",
+        ).only(
+            "id",
+            "student_id",
+            "course_id",
+            "batch_id",
+            "status",
+            "enrollment_date",
+            "course__name",
+            "batch__name",
+        )
+        students = students.select_related("user").prefetch_related(
+            Prefetch("enrollments", queryset=active_enrollments, to_attr="active_enrollments")
+        ).distinct().order_by("name")
+        serializer=StudentsListSerializer(students,many=True)
         return Response(serializer.data)
 
     if request.method=='POST':
@@ -824,8 +836,44 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
     rbac_resource = "attendance"
     serializer_class = AttendanceSessionSerializer
 
+    def get_serializer_class(self):
+        if self.action == "list":
+            return AttendanceSessionListSerializer
+        return AttendanceSessionSerializer
+
+    def get_record_queryset(self):
+        return Attendance.objects.select_related("student").only(
+            "id",
+            "session_id",
+            "student_id",
+            "student__name",
+            "student__f_name",
+            "student__student_number",
+            "student__enrollment_date",
+            "date",
+            "status",
+            "is_present",
+            "check_in_time",
+            "check_out_time",
+            "remarks",
+            "reason_for_absence",
+            "is_locked",
+        ).order_by("student__name")
+
+    def get_session_for_response(self, session):
+        return AttendanceSession.objects.filter(
+            tenant=self.request.user.tenant,
+            id=session.id,
+        ).select_related(
+            "batch",
+            "course",
+            "teacher",
+        ).prefetch_related(
+            Prefetch("records", queryset=self.get_record_queryset())
+        ).get()
+
     def get_queryset(self):
-        queryset = AttendanceSession.objects.filter(tenant=self.request.user.tenant).select_related("batch", "course", "teacher").prefetch_related("records")
+        queryset = AttendanceSession.objects.filter(tenant=self.request.user.tenant).select_related("batch", "course", "teacher")
         if is_teacher_user(self.request.user):
             queryset = queryset.filter(batch__teachers=self.request.user.teacher_profile)
         batch = self.request.query_params.get("batch")
@@ -843,6 +891,20 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(date__gte=convert_query_date(start_date, self.request.user.tenant, "attendance"))
         if end_date:
             queryset = queryset.filter(date__lte=convert_query_date(end_date, self.request.user.tenant, "attendance"))
+        if self.action == "list":
+            queryset = queryset.annotate(
+                present_count=Count("records", filter=Q(records__status=Attendance.Status.PRESENT), distinct=True),
+                absent_count=Count("records", filter=Q(records__status=Attendance.Status.ABSENT), distinct=True),
+                late_count=Count("records", filter=Q(records__status=Attendance.Status.LATE), distinct=True),
+                excused_count=Count("records", filter=Q(records__status=Attendance.Status.EXCUSED), distinct=True),
+                leave_count=Count(
+                    "records",
+                    filter=Q(records__status__in=[Attendance.Status.EXCUSED, Attendance.Status.SICK_LEAVE]),
+                    distinct=True,
+                ),
+            )
+        else:
+            queryset = queryset.prefetch_related(Prefetch("records", queryset=self.get_record_queryset()))
         return queryset
 
     def perform_create(self, serializer):
@@ -892,7 +954,7 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
                     "marked_by": request.user,
                 },
             )
-        return Response(self.get_serializer(session).data, status=status.HTTP_201_CREATED)
+        return Response(self.get_serializer(self.get_session_for_response(session)).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
     def mark(self, request, pk=None):
@@ -912,7 +974,7 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
             record.save()
         session.status = AttendanceSession.Status.SUBMITTED
         session.save(update_fields=["status", "updated_at"])
-        return Response(self.get_serializer(session).data)
+        return Response(self.get_serializer(self.get_session_for_response(session)).data)
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
@@ -922,7 +984,7 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
         session.approved_at = timezone.now()
         session.save(update_fields=["status", "approved_by", "approved_at", "updated_at"])
         session.records.update(approved_by=request.user)
-        return Response(self.get_serializer(session).data)
+        return Response(self.get_serializer(self.get_session_for_response(session)).data)
 
     @action(detail=True, methods=["post"])
     def lock(self, request, pk=None):
@@ -930,7 +992,7 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
         session.status = AttendanceSession.Status.LOCKED
         session.save(update_fields=["status", "updated_at"])
         session.records.update(is_locked=True)
-        return Response(self.get_serializer(session).data)
+        return Response(self.get_serializer(self.get_session_for_response(session)).data)
 
     @action(detail=False, methods=["get"])
     def dashboard(self, request):
@@ -971,6 +1033,11 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     permission_classes = [HasRBACPermission]
     rbac_resource = "attendance"
     serializer_class = AttendanceSerializer
+
+    def get_serializer_class(self):
+        if self.action in ["list", "report"]:
+            return AttendanceRecordListSerializer
+        return AttendanceSerializer
 
     def get_queryset(self):
         queryset = Attendance.objects.filter(tenant=self.request.user.tenant).select_related("student", "enrollment", "course", "class_fk", "teacher", "marked_by")

@@ -18,6 +18,7 @@ from .shamsi import CALENDAR_SHAMSI, to_gregorian
 from .models import (
     Assessment,
     Attendance,
+    AttendanceSession,
     Classes,
     Course,
     Enrollment,
@@ -770,6 +771,41 @@ class SummaryEndpointTests(TestCase):
         response = self.client.get(f"/api/students/by-class/{self.other_batch.id}/?summary=1")
 
         self.assertEqual(response.status_code, 403)
+
+    def test_students_list_returns_lightweight_table_payload(self):
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.get("/api/students/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        row = response.data[0]
+        self.assertEqual(row["name"], "Summary Student")
+        self.assertEqual(row["f_name"], "Summary Parent")
+        self.assertEqual(row["current_enrollments"][0]["batch_name"], "Batch A")
+        self.assertEqual(row["current_enrollments"][0]["course_name"], "Math")
+        self.assertNotIn("attendances", row)
+        self.assertNotIn("marks", row)
+
+    def test_attendance_sessions_list_omits_records(self):
+        self.client.force_authenticate(user=self.admin)
+        session = AttendanceSession.objects.create(
+            tenant=self.tenant,
+            batch=self.batch,
+            course=self.course,
+            teacher=self.teacher,
+            date=date(2026, 8, 1),
+            created_by=self.admin,
+        )
+        self.student.attendances.update(session=session)
+
+        response = self.client.get("/api/attendance-sessions/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["present_count"], 1)
+        self.assertEqual(response.data[0]["absent_count"], 1)
+        self.assertNotIn("records", response.data[0])
 
 
 class PublicOnlinePageTests(TestCase):
