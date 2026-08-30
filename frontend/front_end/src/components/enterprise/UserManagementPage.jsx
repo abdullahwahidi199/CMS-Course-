@@ -40,7 +40,7 @@ function Field({ label, children }) {
 }
 
 export default function UserManagementPage() {
-  const users = useApiResource("/v1/users/");
+  const users = useApiResource("/v1/users/", { fetchAllPages: true });
   const roles = useApiResource("/v1/roles/");
   const visibleRoles = assignableRoles(roles.results);
   const [form, setForm] = useState(emptyUser);

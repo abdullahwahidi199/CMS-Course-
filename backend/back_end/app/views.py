@@ -2274,6 +2274,12 @@ class CourseViewSet(viewsets.ModelViewSet):
     permission_classes = [HasRBACPermission]
     rbac_resource = "courses"
     serializer_class = CourseSerializer
+    # Courses are reference data used by selectors throughout the application.
+    # Returning a paginated response here silently limited those selectors to
+    # the global first page (25 records), because most consumers load this
+    # endpoint once. Keep large transactional endpoints paginated, but always
+    # return the complete tenant-scoped course list.
+    pagination_class = None
 
     def get_queryset(self):
         return Course.objects.filter(tenant=self.request.user.tenant)

@@ -787,6 +787,25 @@ class SummaryEndpointTests(TestCase):
         self.assertNotIn("attendances", row)
         self.assertNotIn("marks", row)
 
+    def test_courses_list_is_not_truncated_by_global_pagination(self):
+        Course.objects.bulk_create(
+            [
+                Course(
+                    tenant=self.tenant,
+                    name=f"Course {index:02d}",
+                    code=f"C{index:02d}",
+                )
+                for index in range(30)
+            ]
+        )
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.get("/api/courses/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(response.data, list)
+        self.assertEqual(len(response.data), 31)
+
     def test_attendance_sessions_list_omits_records(self):
         self.client.force_authenticate(user=self.admin)
         session = AttendanceSession.objects.create(
